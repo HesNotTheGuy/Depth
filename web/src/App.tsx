@@ -7,7 +7,7 @@ function App() {
   const step = useUIStore((s) => s.step);
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-white overflow-hidden">
+    <div className="h-screen w-screen flex flex-col bg-surface overflow-hidden">
       {step === 'upload' ? <UploadScreen /> : <Editor />}
       <ExportModal />
     </div>

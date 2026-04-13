@@ -1,5 +1,5 @@
 import { useMemo, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useSceneStore } from '../../store/useSceneStore';
 import { findSurfaceBelow } from '../../utils/surfaceUtils';
@@ -23,6 +23,12 @@ export function SceneObject() {
   const surfaces = useSceneStore((s) => s.surfaces);
   const snapToSurface = useSceneStore((s) => s.snapToSurface);
   const setObjectPosition = useSceneStore((s) => s.setObjectPosition);
+  const invalidate = useThree((s) => s.invalidate);
+
+  // Invalidate on any prop change so demand-mode canvas re-renders
+  useEffect(() => {
+    invalidate();
+  });
 
   // Snap to surface when position/surfaces change
   useEffect(() => {
@@ -37,11 +43,6 @@ export function SceneObject() {
       }
     }
   }, [position.x, position.z, surfaces, snapToSurface, objectType, scale]);
-
-  // Keep canvas rendering
-  useFrame(({ invalidate }) => {
-    invalidate();
-  });
 
   const geometry = useMemo(() => {
     switch (objectType) {

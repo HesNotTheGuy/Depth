@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Upload, ArrowRight } from 'lucide-react';
+import { Upload, ArrowRight, Sparkles, Image } from 'lucide-react';
 import { useSceneStore } from '../store/useSceneStore';
 import { useUIStore } from '../store/useUIStore';
 import { estimateLighting } from '../utils/lightingEstimator';
@@ -52,13 +52,88 @@ export function UploadScreen() {
   );
 
   return (
-    <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 p-6">
-      <div className="text-center mb-8">
-        <h1 className="text-4xl font-bold tracking-tight mb-2">
-          <span className="text-primary">DEPTH</span>
-        </h1>
-        <p className="text-text-secondary text-lg">
-          Drop in a photo, place a 3D object, match the lighting.
+    <div className="flex-1 flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Animated background */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {/* Ambient glow */}
+        <div
+          className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full blur-[120px] opacity-20"
+          style={{ background: 'radial-gradient(circle, #8B5CF6, transparent)' }}
+        />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-80 h-80 rounded-full blur-[120px] opacity-15"
+          style={{ background: 'radial-gradient(circle, #06B6D4, transparent)' }}
+        />
+
+        {/* Floating wireframe shapes */}
+        {/* Floating wireframe shapes */}
+        {/* Cube wireframe - top left */}
+        <svg className="absolute top-[10%] left-[8%] w-28 h-28 animate-drift-1 opacity-[0.12]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.8">
+          <path d="M25 35 L50 20 L75 35 L75 65 L50 80 L25 65 Z" className="text-primary" />
+          <path d="M25 35 L50 50 L75 35" className="text-primary" />
+          <path d="M50 50 L50 80" className="text-primary" />
+        </svg>
+
+        {/* Triangle - top right */}
+        <svg className="absolute top-[12%] right-[10%] w-24 h-24 animate-drift-2 opacity-[0.10]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1">
+          <polygon points="50,15 85,80 15,80" className="text-accent" />
+          <line x1="50" y1="15" x2="50" y2="80" className="text-accent" opacity="0.4" />
+        </svg>
+
+        {/* Circle with cross - middle left */}
+        <svg className="absolute top-[45%] left-[4%] w-20 h-20 animate-drift-3 opacity-[0.08]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1">
+          <circle cx="50" cy="50" r="35" className="text-purple-400" />
+          <line x1="50" y1="15" x2="50" y2="85" className="text-purple-400" opacity="0.4" />
+          <line x1="15" y1="50" x2="85" y2="50" className="text-purple-400" opacity="0.4" />
+        </svg>
+
+        {/* Diamond - bottom right */}
+        <svg className="absolute bottom-[18%] right-[7%] w-22 h-22 animate-drift-1 opacity-[0.09]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1" style={{ animationDelay: '-7s' }}>
+          <polygon points="50,10 90,50 50,90 10,50" className="text-accent" />
+          <polygon points="50,25 75,50 50,75 25,50" className="text-accent" opacity="0.4" />
+        </svg>
+
+        {/* Torus-ish rings - bottom left */}
+        <svg className="absolute bottom-[22%] left-[10%] w-24 h-24 animate-drift-2 opacity-[0.08]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="0.8" style={{ animationDelay: '-12s' }}>
+          <ellipse cx="50" cy="50" rx="40" ry="20" className="text-primary" />
+          <ellipse cx="50" cy="50" rx="20" ry="40" className="text-primary" opacity="0.5" />
+        </svg>
+
+        {/* Pentagon - far right center */}
+        <svg className="absolute top-[55%] right-[3%] w-16 h-16 animate-drift-3 opacity-[0.06]" viewBox="0 0 100 100" fill="none" stroke="currentColor" strokeWidth="1" style={{ animationDelay: '-15s' }}>
+          <polygon points="50,10 95,40 80,90 20,90 5,40" className="text-purple-300" />
+        </svg>
+
+        {/* Orbiting dots */}
+        <div className="absolute top-[28%] right-[22%] w-44 h-44 animate-orbit opacity-[0.12]">
+          <div className="absolute top-0 left-1/2 w-1.5 h-1.5 -ml-0.75 rounded-full bg-primary" />
+          <div className="absolute bottom-0 left-1/2 w-1 h-1 -ml-0.5 rounded-full bg-accent" />
+          <div className="absolute top-1/2 left-0 w-1 h-1 -mt-0.5 rounded-full bg-purple-400" />
+        </div>
+
+        {/* Small floating particles */}
+        <div className="absolute top-[60%] right-[30%] w-1.5 h-1.5 rounded-full bg-primary/30 animate-drift-3" style={{ animationDelay: '-5s' }} />
+        <div className="absolute top-[20%] left-[40%] w-2 h-2 rounded-full bg-accent/20 animate-drift-1" style={{ animationDelay: '-10s' }} />
+        <div className="absolute top-[70%] left-[30%] w-1.5 h-1.5 rounded-full bg-purple-400/20 animate-drift-2" style={{ animationDelay: '-3s' }} />
+        <div className="absolute top-[35%] left-[20%] w-1 h-1 rounded-full bg-primary/25 animate-drift-1" style={{ animationDelay: '-18s' }} />
+        <div className="absolute top-[80%] right-[40%] w-1 h-1 rounded-full bg-accent/15 animate-drift-2" style={{ animationDelay: '-8s' }} />
+      </div>
+
+      <div className="relative z-10 text-center mb-10 animate-fade-in">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+            <Sparkles size={20} className="text-white" />
+          </div>
+          <h1 className="text-5xl font-bold tracking-tight">
+            <span className="bg-gradient-to-r from-primary via-purple-400 to-accent bg-clip-text text-transparent">
+              DEPTH
+            </span>
+          </h1>
+        </div>
+        <p className="text-text-secondary text-lg max-w-md">
+          Drop in a photo. Place a 3D object. Match the lighting.
+          <br />
+          <span className="text-text-muted text-sm">Compositing made simple.</span>
         </p>
       </div>
 
@@ -70,19 +145,29 @@ export function UploadScreen() {
           }}
           onDragLeave={() => setDragOver(false)}
           onDrop={handleDrop}
-          className={`w-full max-w-lg aspect-[4/3] border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-4 transition-colors cursor-pointer ${
+          className={`relative z-10 w-full max-w-lg aspect-[4/3] border border-dashed rounded-2xl flex flex-col items-center justify-center gap-5 transition-all duration-300 cursor-pointer group animate-fade-in ${
             dragOver
-              ? 'border-primary bg-primary/5'
-              : 'border-gray-300 hover:border-primary/50 hover:bg-gray-100'
+              ? 'border-primary bg-primary/5 scale-[1.02]'
+              : 'border-white/10 hover:border-primary/40 hover:bg-white/[0.02]'
           }`}
           onClick={() => document.getElementById('file-input')?.click()}
         >
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Upload size={28} className="text-primary" />
+          <div className={`w-16 h-16 rounded-2xl flex items-center justify-center transition-all duration-300 ${
+            dragOver
+              ? 'bg-primary/20 scale-110'
+              : 'bg-white/5 group-hover:bg-primary/10'
+          }`}>
+            {dragOver ? (
+              <Image size={28} className="text-primary" />
+            ) : (
+              <Upload size={28} className="text-text-muted group-hover:text-primary transition-colors" />
+            )}
           </div>
           <div className="text-center">
-            <p className="font-medium text-text-primary">Drop your base image here</p>
-            <p className="text-sm text-text-muted mt-1">
+            <p className="font-medium text-text-primary">
+              {dragOver ? 'Drop to upload' : 'Drop your base image here'}
+            </p>
+            <p className="text-sm text-text-muted mt-1.5">
               or click to browse — PNG, JPG, WebP
             </p>
           </div>
@@ -95,20 +180,33 @@ export function UploadScreen() {
           />
         </div>
       ) : (
-        <div className="w-full max-w-lg">
-          <div className="relative rounded-2xl overflow-hidden border border-panel-border shadow-sm">
+        <div className="relative z-10 w-full max-w-lg animate-fade-in">
+          <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl shadow-black/30">
             <img
               src={preview}
               alt="Uploaded base image"
               className="w-full aspect-[4/3] object-cover"
             />
             {isAnalyzing && (
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                <div className="bg-white rounded-xl px-5 py-3 flex items-center gap-3">
+              <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center">
+                <div className="bg-surface-raised/90 backdrop-blur-md border border-white/10 rounded-xl px-6 py-3.5 flex items-center gap-3">
                   <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm font-medium text-text-primary">
-                    Analyzing lighting...
-                  </span>
+                  <div>
+                    <span className="text-sm font-medium text-text-primary block">
+                      Analyzing lighting
+                    </span>
+                    <span className="text-xs text-text-muted">
+                      Estimating direction, color, intensity...
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {!isAnalyzing && (
+              <div className="absolute top-3 right-3">
+                <div className="bg-success/90 text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1.5">
+                  <Sparkles size={12} />
+                  Lighting matched
                 </div>
               </div>
             )}
@@ -121,14 +219,14 @@ export function UploadScreen() {
                 setBackgroundImage(null);
                 setEstimatedLighting(null);
               }}
-              className="flex-1 py-2.5 border border-panel-border rounded-xl text-sm font-medium text-text-secondary hover:bg-gray-50 transition-colors"
+              className="flex-1 py-3 border border-white/10 rounded-xl text-sm font-medium text-text-secondary hover:bg-white/[0.03] hover:border-white/20 transition-all"
             >
-              Choose different image
+              Choose different
             </button>
             <button
               onClick={() => setStep('editor')}
               disabled={isAnalyzing}
-              className="flex-1 py-2.5 bg-primary hover:bg-primary-hover text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              className="flex-1 py-3 bg-gradient-to-r from-primary to-primary-hover hover:brightness-110 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary/20"
             >
               Continue
               <ArrowRight size={16} />
@@ -137,9 +235,10 @@ export function UploadScreen() {
         </div>
       )}
 
-      <p className="text-xs text-text-muted mt-8 max-w-md text-center">
-        Your image is analyzed locally in your browser to estimate lighting direction,
-        color temperature, and brightness. Nothing is uploaded to any server.
+      <p className="relative z-10 text-xs text-text-muted mt-10 max-w-sm text-center leading-relaxed">
+        Everything runs locally in your browser.
+        <br />
+        No uploads. No servers. Just pixels.
       </p>
     </div>
   );

@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cstdio>
 #include <cmath>
+#include <cstring>
 
 using namespace depth;
 
@@ -130,6 +131,48 @@ void test_software_renderer() {
     printf("  PASS: Software renderer\n");
 }
 
+void test_obj_loading() {
+    // Test loading OBJ from memory — a simple triangle
+    const char* obj_data =
+        "v 0.0 0.0 0.0\n"
+        "v 1.0 0.0 0.0\n"
+        "v 0.0 1.0 0.0\n"
+        "f 1 2 3\n";
+
+    Status status;
+    auto mesh = Mesh::load_obj_from_memory(obj_data, std::strlen(obj_data), &status);
+    assert(status == Status::Ok);
+    assert(mesh.triangle_count() == 1);
+    assert(mesh.vertices.size() == 3);
+
+    // Check positions
+    assert(std::abs(mesh.vertices[0].position.x) < 0.01f);
+    assert(std::abs(mesh.vertices[1].position.x - 1.0f) < 0.01f);
+    assert(std::abs(mesh.vertices[2].position.y - 1.0f) < 0.01f);
+
+    // Normal should be computed as (0, 0, 1) for this triangle
+    assert(std::abs(mesh.vertices[0].normal.z - 1.0f) < 0.01f);
+
+    // Test quad triangulation
+    const char* quad_data =
+        "v 0 0 0\nv 1 0 0\nv 1 1 0\nv 0 1 0\n"
+        "f 1 2 3 4\n";
+    auto quad_mesh = Mesh::load_obj_from_memory(quad_data, std::strlen(quad_data), &status);
+    assert(status == Status::Ok);
+    assert(quad_mesh.triangle_count() == 2);
+
+    // Test with normals
+    const char* norm_data =
+        "v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+        "vn 0 0 -1\n"
+        "f 1//1 2//1 3//1\n";
+    auto norm_mesh = Mesh::load_obj_from_memory(norm_data, std::strlen(norm_data), &status);
+    assert(status == Status::Ok);
+    assert(std::abs(norm_mesh.vertices[0].normal.z - (-1.0f)) < 0.01f);
+
+    printf("  PASS: OBJ mesh loading\n");
+}
+
 void test_compositor() {
     Image bg(64, 64, PixelFormat::RGBA8);
     Image fg(64, 64, PixelFormat::RGBA8);
@@ -167,6 +210,7 @@ int main() {
     test_material_presets();
     test_lighting_estimate();
     test_software_renderer();
+    test_obj_loading();
     test_compositor();
 
     printf("\nAll tests passed.\n");

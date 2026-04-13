@@ -4,6 +4,14 @@
 
 Built for designers who need occasional 3D visuals without learning Blender — and for creative tool companies looking to embed 3D compositing into their products.
 
+<p align="center">
+  <img src="docs/screenshots/upload.png" alt="Upload Screen" width="720" />
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/editor.png" alt="Editor — metallic sphere on studio backdrop" width="720" />
+</p>
+
 ---
 
 ## Repository Structure
@@ -20,8 +28,9 @@ The core technology: a zero-dependency C++ library for compositing 3D objects on
 
 - **Lighting estimation** — analyzes a photo to estimate light direction, color temp, brightness
 - **Surface detection** — define collision planes from drawn quads for realistic object placement
-- **3D rendering** — software renderer (CPU), with Vulkan/Metal backends on the roadmap
-- **Compositing** — alpha-over blending of 3D layer onto background plate
+- **3D rendering** — software rasterizer with z-buffer, per-pixel shading, and triangle mesh support
+- **OBJ mesh loading** — import Wavefront OBJ files with automatic normal computation
+- **Compositing** — alpha-over blending with Normal, Multiply, Screen, and Overlay modes
 - **C + C++ APIs** — clean C++ interface with a flat C API for FFI/embedding in any language
 
 ```cpp
@@ -33,22 +42,32 @@ scene.add_object({.geometry = GeometryType::Box, .transform = {.position = {0, 0
 render_composite(*Renderer::create(), scene).save("output.png");
 ```
 
-[Read the SDK docs →](./sdk/README.md)
-
 ### [`web/`](./web) — Web Prototype
 
-Interactive browser demo built with React, Three.js, and Tailwind. Used for UX validation and product testing.
+Interactive browser demo built with React 19, Three.js (React Three Fiber), Zustand, and Tailwind CSS v4.
 
 - Upload a background photo → auto-analyze lighting
-- Pick a 3D shape, adjust position/scale/material
-- Draw surface planes on the image for collision
-- Export composite as PNG/WebP/JPEG
+- Pick from 5 primitive shapes, adjust position/scale/rotation
+- Choose material presets (matte, glossy, metal, glass, plastic) with color swatches
+- Draw surface planes on the image for object collision/snapping
+- Fine-tune lighting direction, height, shadow, and color
+- Export composite as PNG/WebP/JPEG (or copy to clipboard)
 
 ```bash
 cd web && npm install && npm run dev
 ```
 
-[Read the web docs →](./web/README.md)
+---
+
+## Screenshots
+
+| Upload | Editor | Materials |
+|--------|--------|-----------|
+| ![Upload](docs/screenshots/upload.png) | ![Editor](docs/screenshots/editor.png) | ![Materials](docs/screenshots/materials.png) |
+
+| Lighting | Surfaces |
+|----------|----------|
+| ![Lighting](docs/screenshots/lighting.png) | ![Surfaces](docs/screenshots/surfaces.png) |
 
 ---
 

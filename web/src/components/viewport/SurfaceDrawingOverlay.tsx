@@ -100,19 +100,22 @@ export function SurfaceDrawingOverlay() {
       {/* Drawing mode HUD */}
       {isDrawing && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20">
-          <div className="bg-primary text-white text-sm px-4 py-2 rounded-xl shadow-lg flex items-center gap-3">
-            <span>
-              Click to place corner {drawingPoints.length + 1} of 4
+          <div className="bg-surface-raised/90 backdrop-blur-md border border-primary/20 text-text-primary text-xs px-4 py-2.5 rounded-xl shadow-2xl shadow-black/30 flex items-center gap-3">
+            <div className="w-5 h-5 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+              {drawingPoints.length + 1}
+            </div>
+            <span className="text-text-secondary">
+              Click to place corner <span className="text-primary font-semibold">{drawingPoints.length + 1}</span> of 4
             </span>
-            <span className="text-white/60">|</span>
+            <span className="text-white/10">|</span>
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 cancelDrawing();
               }}
-              className="text-white/80 hover:text-white text-xs underline"
+              className="text-text-muted hover:text-danger text-[10px] transition-colors"
             >
-              Cancel (right-click)
+              Cancel
             </button>
           </div>
         </div>

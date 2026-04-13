@@ -1,5 +1,5 @@
-import { Suspense } from 'react';
-import { Canvas } from '@react-three/fiber';
+import { Suspense, useEffect } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, Environment, ContactShadows } from '@react-three/drei';
 import { useSceneStore } from '../../store/useSceneStore';
 import { SceneObject } from './SceneObject';
@@ -12,6 +12,9 @@ function SceneLighting() {
   const lightElevation = useSceneStore((s) => s.lightElevation);
   const lightColor = useSceneStore((s) => s.lightColor);
   const shadowOpacity = useSceneStore((s) => s.shadowOpacity);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => { invalidate(); });
 
   const dirRad = (lightAngle * Math.PI) / 180;
   const height = 2 + lightElevation * 6;
@@ -54,7 +57,7 @@ export function CompositeViewport() {
   const backgroundImage = useSceneStore((s) => s.backgroundImage);
 
   return (
-    <div className="flex-1 relative">
+    <div className="flex-1 relative bg-surface">
       {/* Background image layer */}
       {backgroundImage && (
         <img
@@ -68,6 +71,7 @@ export function CompositeViewport() {
       {/* 3D canvas layer */}
       <Canvas
         shadows
+        frameloop="demand"
         gl={{
           preserveDrawingBuffer: true,
           antialias: true,
@@ -82,16 +86,18 @@ export function CompositeViewport() {
           <SceneObject />
           <SurfacePlanes />
           <OrbitControls enablePan enableZoom makeDefault minDistance={1} maxDistance={10} />
+        </Suspense>
+        <Suspense fallback={null}>
           <Environment preset="studio" environmentIntensity={0.3} />
         </Suspense>
       </Canvas>
 
-      {/* Surface drawing overlay (sits on top of both) */}
+      {/* Surface drawing overlay */}
       <SurfaceDrawingOverlay />
 
       {/* Hint overlay */}
       <div className="absolute bottom-3 left-3 pointer-events-none">
-        <div className="bg-black/50 text-white text-xs px-3 py-1.5 rounded-lg backdrop-blur-sm">
+        <div className="bg-black/60 backdrop-blur-md text-white/60 text-[10px] px-3 py-1.5 rounded-lg border border-white/5">
           Drag to orbit &middot; Scroll to zoom &middot; Middle-click to pan
         </div>
       </div>

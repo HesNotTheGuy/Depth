@@ -1,5 +1,5 @@
 import { useSceneStore } from '../../store/useSceneStore';
-import { Zap } from 'lucide-react';
+import { Sparkles, RotateCcw } from 'lucide-react';
 
 export function LightingPanel() {
   const brightness = useSceneStore((s) => s.brightness);
@@ -28,22 +28,27 @@ export function LightingPanel() {
   return (
     <div>
       {estimatedLighting && (
-        <div className="mb-4 p-3 bg-primary/5 border border-primary/20 rounded-lg">
-          <div className="flex items-center gap-2 mb-1">
-            <Zap size={14} className="text-primary" />
-            <span className="text-xs font-medium text-primary">Auto-matched from image</span>
+        <div className="mb-5 p-3 bg-primary/5 border border-primary/15 rounded-xl">
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-2">
+              <Sparkles size={13} className="text-primary" />
+              <span className="text-[11px] font-semibold text-primary">
+                {autoLighting ? 'Auto-matched' : 'Manually adjusted'}
+              </span>
+            </div>
+            {!autoLighting && (
+              <button
+                onClick={resetToEstimate}
+                className="flex items-center gap-1 text-[10px] text-primary/70 hover:text-primary transition-colors"
+              >
+                <RotateCcw size={10} />
+                Reset
+              </button>
+            )}
           </div>
-          <p className="text-[10px] text-text-muted">
-            Lighting was estimated from your background photo. Adjust below to fine-tune.
+          <p className="text-[10px] text-text-muted leading-relaxed">
+            Lighting estimated from your photo. Adjust below to fine-tune.
           </p>
-          {!autoLighting && (
-            <button
-              onClick={resetToEstimate}
-              className="text-[10px] text-primary hover:underline mt-1"
-            >
-              Reset to auto estimate
-            </button>
-          )}
         </div>
       )}
 
@@ -56,7 +61,7 @@ export function LightingPanel() {
         onChange={(v) => { setBrightness(v); setAutoLighting(false); }}
       />
       <SliderControl
-        label="Light Direction"
+        label="Direction"
         value={lightAngle}
         min={0}
         max={360}
@@ -65,7 +70,7 @@ export function LightingPanel() {
         unit="°"
       />
       <SliderControl
-        label="Light Height"
+        label="Height"
         value={lightElevation}
         min={0}
         max={1}
@@ -73,7 +78,7 @@ export function LightingPanel() {
         onChange={(v) => { setLightElevation(v); setAutoLighting(false); }}
       />
       <SliderControl
-        label="Shadow Strength"
+        label="Shadow"
         value={shadowOpacity}
         min={0}
         max={1}
@@ -81,20 +86,20 @@ export function LightingPanel() {
         onChange={(v) => { setShadowOpacity(v); setAutoLighting(false); }}
       />
 
-      <div className="mt-3">
-        <label className="text-xs text-text-muted font-medium mb-1.5 block">Light Color</label>
-        <div className="flex items-center gap-2">
+      <div className="mt-4">
+        <label className="text-[11px] text-text-muted font-medium mb-2 block">Light Color</label>
+        <div className="flex items-center gap-2.5">
           <input
             type="color"
             value={lightColor}
             onChange={(e) => { setLightColor(e.target.value); setAutoLighting(false); }}
-            className="w-8 h-8 rounded border border-panel-border cursor-pointer"
+            className="w-8 h-8 rounded-lg cursor-pointer"
           />
           <input
             type="text"
             value={lightColor}
             onChange={(e) => { setLightColor(e.target.value); setAutoLighting(false); }}
-            className="flex-1 border border-panel-border rounded px-2 py-1 text-sm font-mono text-text-primary focus:outline-none focus:border-primary"
+            className="flex-1 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
           />
         </div>
       </div>
@@ -121,9 +126,9 @@ function SliderControl({
 }) {
   return (
     <div className="mb-3">
-      <div className="flex justify-between text-xs mb-1">
+      <div className="flex justify-between text-[11px] mb-1.5">
         <span className="text-text-muted font-medium">{label}</span>
-        <span className="text-text-muted tabular-nums">
+        <span className="text-text-muted tabular-nums font-mono">
           {value.toFixed(step < 1 ? 2 : 0)}{unit || ''}
         </span>
       </div>
@@ -134,7 +139,7 @@ function SliderControl({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full accent-primary"
+        className="w-full"
       />
     </div>
   );

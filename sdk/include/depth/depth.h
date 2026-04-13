@@ -12,6 +12,7 @@
 #include "depth/image.h"
 #include "depth/lighting.h"
 #include "depth/surface.h"
+#include "depth/mesh.h"
 #include "depth/scene.h"
 #include "depth/renderer.h"
 #include "depth/compositor.h"

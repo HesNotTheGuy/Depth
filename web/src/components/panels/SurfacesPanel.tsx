@@ -14,43 +14,47 @@ export function SurfacesPanel() {
   return (
     <div>
       <div className="mb-4">
-        <p className="text-xs text-text-muted mb-3">
-          Draw surfaces on your photo to define where objects can sit. Click 4 corners to create a
-          plane.
+        <p className="text-[11px] text-text-muted mb-3 leading-relaxed">
+          Draw surfaces on your photo to define where 3D objects can rest. Click 4 corners to create a plane.
         </p>
         <button
           onClick={startDrawing}
           disabled={isDrawing}
-          className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white rounded-lg text-sm font-medium transition-colors"
+          className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${
+            isDrawing
+              ? 'bg-primary/20 text-primary border border-primary/30'
+              : 'bg-gradient-to-r from-primary to-primary-hover hover:brightness-110 text-white shadow-lg shadow-primary/15'
+          }`}
         >
-          <PenTool size={16} />
+          <PenTool size={15} />
           {isDrawing ? 'Drawing...' : 'Draw Surface'}
         </button>
       </div>
 
-      <label className="flex items-center gap-2 cursor-pointer mb-4">
+      <label className="flex items-center gap-2.5 cursor-pointer mb-4 group">
         <input
           type="checkbox"
           checked={snapToSurface}
           onChange={(e) => setSnapToSurface(e.target.checked)}
-          className="accent-primary"
         />
-        <Magnet size={14} className="text-text-muted" />
-        <span className="text-sm text-text-secondary">Snap object to surfaces</span>
+        <Magnet size={13} className="text-text-muted group-hover:text-primary transition-colors" />
+        <span className="text-xs text-text-secondary group-hover:text-text-primary transition-colors">
+          Snap to surfaces
+        </span>
       </label>
 
       {surfaces.length === 0 ? (
-        <div className="text-center py-6">
-          <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center mx-auto mb-2">
-            <PenTool size={20} className="text-text-muted" />
+        <div className="text-center py-8">
+          <div className="w-12 h-12 rounded-xl bg-white/[0.03] flex items-center justify-center mx-auto mb-3">
+            <PenTool size={18} className="text-text-muted" />
           </div>
-          <p className="text-xs text-text-muted">
-            No surfaces yet. Draw one to define where your object can rest.
+          <p className="text-[11px] text-text-muted leading-relaxed max-w-[180px] mx-auto">
+            No surfaces yet. Draw one so your object has a place to land.
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          <label className="text-xs font-medium text-text-muted uppercase tracking-wider block">
+          <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest block">
             Surfaces ({surfaces.length})
           </label>
           {surfaces.map((surface) => (
@@ -80,35 +84,34 @@ function SurfaceItem({
   onUpdate: (updates: Partial<SurfacePlane>) => void;
 }) {
   return (
-    <div className="border border-panel-border rounded-lg p-2.5">
-      <div className="flex items-center gap-2 mb-2">
+    <div className="border border-white/6 bg-white/[0.02] rounded-xl p-3">
+      <div className="flex items-center gap-2 mb-2.5">
         <div
-          className="w-3 h-3 rounded-full shrink-0"
+          className="w-2.5 h-2.5 rounded-full shrink-0 ring-2 ring-white/10"
           style={{ backgroundColor: surface.color }}
         />
         <input
           type="text"
           value={surface.name}
           onChange={(e) => onUpdate({ name: e.target.value })}
-          className="flex-1 text-sm text-text-primary bg-transparent focus:outline-none"
+          className="flex-1 text-xs text-text-primary bg-transparent focus:outline-none"
         />
         <button
           onClick={onToggle}
-          className="p-1 hover:bg-gray-100 rounded text-text-muted"
+          className="p-1 hover:bg-white/5 rounded-md text-text-muted hover:text-text-secondary transition-colors"
           title={surface.visible ? 'Hide' : 'Show'}
         >
-          {surface.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+          {surface.visible ? <Eye size={13} /> : <EyeOff size={13} />}
         </button>
         <button
           onClick={onDelete}
-          className="p-1 hover:bg-red-50 hover:text-red-500 rounded text-text-muted"
+          className="p-1 hover:bg-danger/10 hover:text-danger rounded-md text-text-muted transition-colors"
           title="Delete"
         >
-          <Trash2 size={14} />
+          <Trash2 size={13} />
         </button>
       </div>
 
-      {/* Height adjustment — most useful control for fine-tuning */}
       <div className="flex items-center gap-2">
         <span className="text-[10px] text-text-muted w-10">Height</span>
         <input
@@ -120,14 +123,13 @@ function SurfaceItem({
           onChange={(e) =>
             onUpdate({ position: { ...surface.position, y: parseFloat(e.target.value) } })
           }
-          className="flex-1 accent-primary"
+          className="flex-1"
         />
-        <span className="text-[10px] text-text-muted tabular-nums w-8 text-right">
+        <span className="text-[10px] text-text-muted tabular-nums font-mono w-8 text-right">
           {surface.position.y.toFixed(2)}
         </span>
       </div>
 
-      {/* Tilt adjustment */}
       <div className="flex items-center gap-2 mt-1">
         <span className="text-[10px] text-text-muted w-10">Tilt</span>
         <input
@@ -139,9 +141,9 @@ function SurfaceItem({
           onChange={(e) =>
             onUpdate({ rotation: { ...surface.rotation, x: parseFloat(e.target.value) } })
           }
-          className="flex-1 accent-primary"
+          className="flex-1"
         />
-        <span className="text-[10px] text-text-muted tabular-nums w-8 text-right">
+        <span className="text-[10px] text-text-muted tabular-nums font-mono w-8 text-right">
           {((surface.rotation.x * 180) / Math.PI).toFixed(0)}°
         </span>
       </div>
