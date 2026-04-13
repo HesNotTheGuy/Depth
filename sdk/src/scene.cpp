@@ -1,4 +1,5 @@
 #include "depth/scene.h"
+#include <algorithm>
 
 namespace depth {
 
