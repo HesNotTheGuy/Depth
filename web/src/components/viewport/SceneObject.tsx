@@ -75,7 +75,6 @@ export function SceneObject() {
   const surfaces = useSceneStore((s) => s.surfaces);
   const snapToSurface = useSceneStore((s) => s.snapToSurface);
   const setObjectPosition = useSceneStore((s) => s.setObjectPosition);
-  const setObjectScale = useSceneStore((s) => s.setObjectScale);
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);

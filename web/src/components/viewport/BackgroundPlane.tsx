@@ -48,7 +48,8 @@ export function BackgroundPlane() {
     const visibleWidth = visibleHeight * aspect;
 
     // object-cover: scale to fill without letterboxing
-    const imgAspect = texture.image.width / texture.image.height;
+    const img = texture.image as HTMLImageElement;
+    const imgAspect = img.width / img.height;
     const planeAspect = visibleWidth / visibleHeight;
     let w = visibleWidth;
     let h = visibleHeight;

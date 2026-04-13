@@ -55,7 +55,6 @@ function SceneLighting() {
 }
 
 export function CompositeViewport() {
-  const backgroundImage = useSceneStore((s) => s.backgroundImage);
   const scale = useSceneStore((s) => s.objectScale);
   const setScale = useSceneStore((s) => s.setObjectScale);
 

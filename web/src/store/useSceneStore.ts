@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EstimatedLighting, DetectedLight } from '../utils/lightingEstimator';
+import type { EstimatedLighting } from '../utils/lightingEstimator';
 
 export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'custom';
 
