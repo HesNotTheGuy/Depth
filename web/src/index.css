@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6C63FF;
+  --color-primary-hover: #5B54E6;
+  --color-panel-border: #E5E7EB;
+  --color-text-primary: #1A1A2E;
+  --color-text-secondary: #374151;
+  --color-text-muted: #9CA3AF;
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: -apple-system, 'Segoe UI', sans-serif;
+}
