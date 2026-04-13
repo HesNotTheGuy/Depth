@@ -50,6 +50,7 @@ endif()
 # Compiler warnings
 if(MSVC)
     target_compile_options(depth PRIVATE /W4)
+    target_compile_definitions(depth PRIVATE _USE_MATH_DEFINES)
 else()
     target_compile_options(depth PRIVATE -Wall -Wextra -Wpedantic)
 endif()
