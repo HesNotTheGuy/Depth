@@ -11,6 +11,7 @@
 
 #include "depth/types.h"
 #include "depth/image.h"
+#include "depth/scene.h"
 
 namespace depth {
 

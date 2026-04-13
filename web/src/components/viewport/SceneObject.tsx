@@ -29,27 +29,28 @@ function useObjModel(url: string | null) {
         let geo: THREE.BufferGeometry | null = null;
         group.traverse((child) => {
           if (!geo && (child as THREE.Mesh).isMesh) {
-            geo = (child as THREE.Mesh).geometry;
+            geo = (child as THREE.Mesh).geometry as THREE.BufferGeometry;
           }
         });
-        if (geo) {
+        if (geo !== null) {
+          const g = geo as THREE.BufferGeometry;
           // Center and normalize to unit size
-          geo.computeBoundingBox();
-          const box = geo.boundingBox!;
+          g.computeBoundingBox();
+          const box = g.boundingBox!;
           const center = new THREE.Vector3();
           box.getCenter(center);
-          geo.translate(-center.x, -center.y, -center.z);
+          g.translate(-center.x, -center.y, -center.z);
 
           const size = new THREE.Vector3();
           box.getSize(size);
           const maxDim = Math.max(size.x, size.y, size.z);
           if (maxDim > 0) {
             const s = 1.0 / maxDim;
-            geo.scale(s, s, s);
+            g.scale(s, s, s);
           }
 
-          geo.computeVertexNormals();
-          setGeometry(geo);
+          g.computeVertexNormals();
+          setGeometry(g);
         } else {
           setError(true);
         }
