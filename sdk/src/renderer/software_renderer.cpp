@@ -265,6 +265,93 @@ static std::vector<Triangle> generate_mesh(GeometryType type) {
     }
 }
 
+// ── PBR Shading (Cook-Torrance BRDF) ─────────────────
+
+static float clampf(float v, float lo, float hi) {
+    return std::max(lo, std::min(hi, v));
+}
+
+// Fresnel-Schlick approximation
+static Vec3 fresnel_schlick(float cos_theta, Vec3 f0) {
+    float t = 1.0f - cos_theta;
+    float t2 = t * t;
+    float t5 = t2 * t2 * t;
+    return {f0.x + (1.0f - f0.x) * t5,
+            f0.y + (1.0f - f0.y) * t5,
+            f0.z + (1.0f - f0.z) * t5};
+}
+
+// GGX/Trowbridge-Reitz normal distribution
+static float distribution_ggx(float ndoth, float alpha) {
+    float a2 = alpha * alpha;
+    float d = ndoth * ndoth * (a2 - 1.0f) + 1.0f;
+    return a2 / (static_cast<float>(M_PI) * d * d + 1e-7f);
+}
+
+// Smith's geometry function (Schlick-GGX)
+static float geometry_schlick_ggx(float ndotv, float k) {
+    return ndotv / (ndotv * (1.0f - k) + k + 1e-7f);
+}
+
+static float geometry_smith(float ndotv, float ndotl, float roughness) {
+    float r1 = roughness + 1.0f;
+    float k = (r1 * r1) / 8.0f;
+    return geometry_schlick_ggx(ndotv, k) * geometry_schlick_ggx(ndotl, k);
+}
+
+// Compute lighting contribution from a single light source
+struct LightContrib {
+    Vec3 color; // linear RGB result for this light
+};
+
+static LightContrib shade_pbr(
+    Vec3 N,          // surface normal
+    Vec3 V,          // view direction (toward camera)
+    Vec3 L,          // light direction (toward light)
+    Vec3 light_col,  // light color * intensity
+    Vec3 albedo,     // base color
+    float metalness,
+    float roughness
+) {
+    Vec3 H = normalize(L + V);
+    float ndotl = std::max(0.0f, dot(N, L));
+    float ndotv = std::max(0.001f, dot(N, V));
+    float ndoth = std::max(0.0f, dot(N, H));
+    float hdotv = std::max(0.0f, dot(H, V));
+
+    // F0: reflectance at normal incidence
+    // Dielectric: 0.04, Metal: albedo
+    Vec3 f0 = {0.04f + metalness * (albedo.x - 0.04f),
+               0.04f + metalness * (albedo.y - 0.04f),
+               0.04f + metalness * (albedo.z - 0.04f)};
+
+    float alpha = std::max(roughness * roughness, 0.001f);
+
+    // Cook-Torrance specular BRDF
+    float D = distribution_ggx(ndoth, alpha);
+    float G = geometry_smith(ndotv, ndotl, roughness);
+    Vec3 F = fresnel_schlick(hdotv, f0);
+
+    float denom = 4.0f * ndotv * ndotl + 1e-4f;
+    Vec3 specular = {(D * G * F.x) / denom,
+                     (D * G * F.y) / denom,
+                     (D * G * F.z) / denom};
+
+    // Diffuse: only dielectric surfaces have diffuse
+    float ks_avg = (F.x + F.y + F.z) / 3.0f;
+    float kd = (1.0f - ks_avg) * (1.0f - metalness);
+    Vec3 diffuse = {kd * albedo.x / static_cast<float>(M_PI),
+                    kd * albedo.y / static_cast<float>(M_PI),
+                    kd * albedo.z / static_cast<float>(M_PI)};
+
+    // Combine
+    Vec3 result = {(diffuse.x + specular.x) * light_col.x * ndotl,
+                   (diffuse.y + specular.y) * light_col.y * ndotl,
+                   (diffuse.z + specular.z) * light_col.z * ndotl};
+
+    return {result};
+}
+
 // ── Software Renderer ─────────────────────────────────
 
 class SoftwareRenderer : public Renderer {
@@ -289,30 +376,44 @@ public:
         Mat4 proj = perspective(cam.fov, aspect, cam.near_clip, cam.far_clip);
         Mat4 vp = proj * view;
 
-        // Light direction (world space, pointing toward the scene)
-        const auto& light = scene.light();
-        float light_rad = light.angle * static_cast<float>(M_PI) / 180.0f;
-        Vec3 light_dir = normalize({
+        // Directional light direction (world space, pointing toward the scene)
+        const auto& dir_light = scene.light();
+        float light_rad = dir_light.angle * static_cast<float>(M_PI) / 180.0f;
+        Vec3 dir_light_dir = normalize({
             std::cos(light_rad),
-            light.elevation + 0.5f,
+            dir_light.elevation + 0.5f,
             std::sin(light_rad)
         });
+        Vec3 dir_light_col = {dir_light.color.r * dir_light.intensity,
+                              dir_light.color.g * dir_light.intensity,
+                              dir_light.color.b * dir_light.intensity};
 
-        float ambient = scene.ambient_intensity();
+        float ambient_i = scene.ambient_intensity();
+        Color ambient_c = scene.ambient_color();
+
+        // Background pixel data for refraction sampling
+        const uint8_t* bg_pixels = nullptr;
+        uint32_t bg_w = 0, bg_h = 0;
+        if (scene.has_background()) {
+            bg_pixels = scene.background().data();
+            bg_w = scene.background().width();
+            bg_h = scene.background().height();
+        }
 
         // Render each object
         for (const auto& obj : scene.objects()) {
             Mat4 model = model_matrix(obj.transform);
-            Mat4 mvp = vp * model;
 
             auto mesh = generate_mesh(obj.geometry);
-            const Color& base = obj.material.base_color;
+            const Material& mat = obj.material;
+            Vec3 albedo = {mat.base_color.r, mat.base_color.g, mat.base_color.b};
 
             for (const auto& tri : mesh) {
-                // Transform vertices to clip space
+                // Transform vertices to clip space + world space
                 struct ScreenVert {
                     float sx, sy, depth;
                     Vec3 world_normal;
+                    Vec3 world_pos;
                 };
                 ScreenVert sv[3];
                 bool valid = true;
@@ -321,7 +422,6 @@ public:
                     Vec4 world = model * Vec4{tri.v[i].pos.x, tri.v[i].pos.y, tri.v[i].pos.z, 1.0f};
                     Vec4 clip = vp * world;
 
-                    // Near-plane clipping (simplified: reject entire tri)
                     if (clip.w < 0.01f) { valid = false; break; }
 
                     float inv_w = 1.0f / clip.w;
@@ -331,8 +431,8 @@ public:
                     sv[i].sx = (ndc_x + 1.0f) * 0.5f * w;
                     sv[i].sy = (1.0f - ndc_y) * 0.5f * h;
                     sv[i].depth = clip.z * inv_w;
+                    sv[i].world_pos = {world.x, world.y, world.z};
 
-                    // Transform normal to world space (ignoring non-uniform scale)
                     Vec4 wn = model * Vec4{tri.v[i].normal.x, tri.v[i].normal.y, tri.v[i].normal.z, 0.0f};
                     sv[i].world_normal = normalize({wn.x, wn.y, wn.z});
                 }
@@ -349,10 +449,9 @@ public:
                 int y0 = std::max(0, static_cast<int>(std::floor(miny)));
                 int y1 = std::min(static_cast<int>(h) - 1, static_cast<int>(std::ceil(maxy)));
 
-                // Edge function denominator for barycentric coords
                 float denom = (sv[1].sy - sv[2].sy) * (sv[0].sx - sv[2].sx) +
                               (sv[2].sx - sv[1].sx) * (sv[0].sy - sv[2].sy);
-                if (std::abs(denom) < 1e-6f) continue; // Degenerate triangle
+                if (std::abs(denom) < 1e-6f) continue;
                 float inv_denom = 1.0f / denom;
 
                 // Rasterize
@@ -360,39 +459,133 @@ public:
                     for (int px = x0; px <= x1; px++) {
                         float fx = px + 0.5f, fy = py + 0.5f;
 
-                        // Barycentric coordinates
-                        float w0 = ((sv[1].sy - sv[2].sy) * (fx - sv[2].sx) +
-                                    (sv[2].sx - sv[1].sx) * (fy - sv[2].sy)) * inv_denom;
-                        float w1 = ((sv[2].sy - sv[0].sy) * (fx - sv[2].sx) +
-                                    (sv[0].sx - sv[2].sx) * (fy - sv[2].sy)) * inv_denom;
-                        float w2 = 1.0f - w0 - w1;
+                        float bw0 = ((sv[1].sy - sv[2].sy) * (fx - sv[2].sx) +
+                                     (sv[2].sx - sv[1].sx) * (fy - sv[2].sy)) * inv_denom;
+                        float bw1 = ((sv[2].sy - sv[0].sy) * (fx - sv[2].sx) +
+                                     (sv[0].sx - sv[2].sx) * (fy - sv[2].sy)) * inv_denom;
+                        float bw2 = 1.0f - bw0 - bw1;
 
-                        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+                        if (bw0 < 0 || bw1 < 0 || bw2 < 0) continue;
 
-                        // Interpolate depth
-                        float z = w0 * sv[0].depth + w1 * sv[1].depth + w2 * sv[2].depth;
+                        float z = bw0 * sv[0].depth + bw1 * sv[1].depth + bw2 * sv[2].depth;
                         size_t idx = static_cast<size_t>(py) * w + px;
 
-                        // Z-test
                         if (z >= zbuf[idx]) continue;
                         zbuf[idx] = z;
 
-                        // Interpolate normal
-                        Vec3 n = normalize({
-                            w0*sv[0].world_normal.x + w1*sv[1].world_normal.x + w2*sv[2].world_normal.x,
-                            w0*sv[0].world_normal.y + w1*sv[1].world_normal.y + w2*sv[2].world_normal.y,
-                            w0*sv[0].world_normal.z + w1*sv[1].world_normal.z + w2*sv[2].world_normal.z,
+                        // Interpolate normal and world position
+                        Vec3 N = normalize({
+                            bw0*sv[0].world_normal.x + bw1*sv[1].world_normal.x + bw2*sv[2].world_normal.x,
+                            bw0*sv[0].world_normal.y + bw1*sv[1].world_normal.y + bw2*sv[2].world_normal.y,
+                            bw0*sv[0].world_normal.z + bw1*sv[1].world_normal.z + bw2*sv[2].world_normal.z,
                         });
+                        Vec3 world_p = {
+                            bw0*sv[0].world_pos.x + bw1*sv[1].world_pos.x + bw2*sv[2].world_pos.x,
+                            bw0*sv[0].world_pos.y + bw1*sv[1].world_pos.y + bw2*sv[2].world_pos.y,
+                            bw0*sv[0].world_pos.z + bw1*sv[1].world_pos.z + bw2*sv[2].world_pos.z,
+                        };
 
-                        // Lambert shading
-                        float ndotl = std::max(0.0f, dot(n, light_dir));
-                        float shade = std::clamp(ambient + ndotl * light.intensity * 0.5f, 0.0f, 1.0f);
+                        Vec3 V = normalize(cam.position - world_p);
+
+                        // ── Accumulate lighting ──
+
+                        // Ambient
+                        Vec3 color = {ambient_c.r * ambient_i * albedo.x,
+                                      ambient_c.g * ambient_i * albedo.y,
+                                      ambient_c.b * ambient_i * albedo.z};
+
+                        // Directional light (PBR)
+                        auto dir_contrib = shade_pbr(N, V, dir_light_dir, dir_light_col,
+                                                     albedo, mat.metalness, mat.roughness);
+                        color.x += dir_contrib.color.x;
+                        color.y += dir_contrib.color.y;
+                        color.z += dir_contrib.color.z;
+
+                        // Point lights (PBR)
+                        for (const auto& pl : scene.point_lights()) {
+                            if (!pl.visible) continue;
+                            Vec3 to_light = pl.position - world_p;
+                            float dist2 = dot(to_light, to_light);
+                            float dist = std::sqrt(dist2);
+                            if (dist > pl.range || dist < 1e-4f) continue;
+
+                            Vec3 L = {to_light.x / dist, to_light.y / dist, to_light.z / dist};
+
+                            // Inverse-square falloff with range attenuation
+                            float attenuation = 1.0f / (1.0f + dist2);
+                            float range_fade = 1.0f - clampf(dist / pl.range, 0.0f, 1.0f);
+                            range_fade *= range_fade; // quadratic fade at edges
+                            attenuation *= range_fade;
+
+                            Vec3 pl_col = {pl.color.r * pl.intensity * attenuation,
+                                           pl.color.g * pl.intensity * attenuation,
+                                           pl.color.b * pl.intensity * attenuation};
+
+                            auto pl_contrib = shade_pbr(N, V, L, pl_col,
+                                                        albedo, mat.metalness, mat.roughness);
+                            color.x += pl_contrib.color.x;
+                            color.y += pl_contrib.color.y;
+                            color.z += pl_contrib.color.z;
+                        }
+
+                        // Clearcoat (additional specular layer)
+                        if (mat.clearcoat > 0.0f) {
+                            float cc_rough = 0.1f; // clearcoat is always smooth
+                            auto cc = shade_pbr(N, V, dir_light_dir, dir_light_col,
+                                                {1,1,1}, 0.0f, cc_rough);
+                            color.x += cc.color.x * mat.clearcoat * 0.25f;
+                            color.y += cc.color.y * mat.clearcoat * 0.25f;
+                            color.z += cc.color.z * mat.clearcoat * 0.25f;
+                        }
+
+                        // ── Glass refraction ──
+                        float alpha_out = 1.0f;
+                        if (mat.transmission > 0.0f && bg_pixels) {
+                            // Approximate refraction: offset the background sample
+                            // by the surface normal projected to screen space
+                            float refract_strength = (mat.ior - 1.0f) * mat.transmission * 30.0f;
+                            int ref_x = px + static_cast<int>(N.x * refract_strength);
+                            int ref_y = py - static_cast<int>(N.y * refract_strength);
+
+                            // Clamp to background bounds (scaled to bg resolution)
+                            float u = clampf(static_cast<float>(ref_x) / w, 0.0f, 1.0f);
+                            float v = clampf(static_cast<float>(ref_y) / h, 0.0f, 1.0f);
+                            int bx = static_cast<int>(u * (bg_w - 1));
+                            int by = static_cast<int>(v * (bg_h - 1));
+                            size_t bg_idx = (static_cast<size_t>(by) * bg_w + bx) * 4;
+
+                            Vec3 bg_col = {bg_pixels[bg_idx + 0] / 255.0f,
+                                           bg_pixels[bg_idx + 1] / 255.0f,
+                                           bg_pixels[bg_idx + 2] / 255.0f};
+
+                            // Fresnel: more reflective at grazing angles
+                            float fresnel = 0.04f + 0.96f * std::pow(1.0f - std::max(0.0f, dot(N, V)), 5.0f);
+                            float transmit = mat.transmission * (1.0f - fresnel);
+
+                            // Blend refracted background with surface color
+                            color.x = color.x * (1.0f - transmit) + bg_col.x * transmit;
+                            color.y = color.y * (1.0f - transmit) + bg_col.y * transmit;
+                            color.z = color.z * (1.0f - transmit) + bg_col.z * transmit;
+
+                            // Glass alpha: mostly transparent, Fresnel edges opaque
+                            alpha_out = clampf(fresnel + (1.0f - mat.transmission) * 0.8f, 0.1f, 1.0f);
+                        }
+
+                        // Tone mapping (Reinhard) + gamma
+                        color.x = color.x / (color.x + 1.0f);
+                        color.y = color.y / (color.y + 1.0f);
+                        color.z = color.z / (color.z + 1.0f);
+
+                        // Gamma correction (linear → sRGB)
+                        color.x = std::pow(color.x, 1.0f / 2.2f);
+                        color.y = std::pow(color.y, 1.0f / 2.2f);
+                        color.z = std::pow(color.z, 1.0f / 2.2f);
 
                         size_t off = idx * 4;
-                        pixels[off + 0] = static_cast<uint8_t>(std::clamp(base.r * shade * 255.0f, 0.0f, 255.0f));
-                        pixels[off + 1] = static_cast<uint8_t>(std::clamp(base.g * shade * 255.0f, 0.0f, 255.0f));
-                        pixels[off + 2] = static_cast<uint8_t>(std::clamp(base.b * shade * 255.0f, 0.0f, 255.0f));
-                        pixels[off + 3] = 255;
+                        pixels[off + 0] = static_cast<uint8_t>(clampf(color.x * 255.0f, 0.0f, 255.0f));
+                        pixels[off + 1] = static_cast<uint8_t>(clampf(color.y * 255.0f, 0.0f, 255.0f));
+                        pixels[off + 2] = static_cast<uint8_t>(clampf(color.z * 255.0f, 0.0f, 255.0f));
+                        pixels[off + 3] = static_cast<uint8_t>(clampf(alpha_out * 255.0f, 0.0f, 255.0f));
                     }
                 }
             }

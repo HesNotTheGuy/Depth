@@ -21,13 +21,61 @@ const swatches = [
   { color: '#F59E0B', label: 'Amber' },
 ];
 
+function SliderRow({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.01,
+  displayValue,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  displayValue?: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <span className="text-[10px] text-text-muted w-20 shrink-0">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="flex-1"
+      />
+      <span className="text-[10px] text-text-muted w-8 text-right tabular-nums font-mono">
+        {displayValue ?? value.toFixed(2)}
+      </span>
+    </div>
+  );
+}
+
 export function MaterialPanel() {
   const material = useSceneStore((s) => s.objectMaterial);
   const color = useSceneStore((s) => s.objectColor);
   const roughness = useSceneStore((s) => s.objectRoughness);
+  const metalness = useSceneStore((s) => s.objectMetalness);
+  const transmission = useSceneStore((s) => s.objectTransmission);
+  const ior = useSceneStore((s) => s.objectIor);
+  const clearcoat = useSceneStore((s) => s.objectClearcoat);
+  const opacity = useSceneStore((s) => s.objectOpacity);
+  const reflectivity = useSceneStore((s) => s.objectReflectivity);
   const setMaterial = useSceneStore((s) => s.setObjectMaterial);
   const setColor = useSceneStore((s) => s.setObjectColor);
   const setRoughness = useSceneStore((s) => s.setObjectRoughness);
+  const setMetalness = useSceneStore((s) => s.setObjectMetalness);
+  const setTransmission = useSceneStore((s) => s.setObjectTransmission);
+  const setIor = useSceneStore((s) => s.setObjectIor);
+  const setClearcoat = useSceneStore((s) => s.setObjectClearcoat);
+  const setOpacity = useSceneStore((s) => s.setObjectOpacity);
+  const setReflectivity = useSceneStore((s) => s.setObjectReflectivity);
 
   return (
     <div>
@@ -106,22 +154,40 @@ export function MaterialPanel() {
         ))}
       </div>
 
-      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
-        Roughness
+      {/* Common controls */}
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
+        Properties
       </label>
-      <div className="flex items-center gap-2.5">
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={roughness}
-          onChange={(e) => setRoughness(parseFloat(e.target.value))}
-          className="flex-1"
-        />
-        <span className="text-[11px] text-text-muted w-8 text-right tabular-nums font-mono">
-          {roughness.toFixed(2)}
-        </span>
+      <div className="space-y-2.5">
+        <SliderRow label="Roughness" value={roughness} onChange={setRoughness} />
+
+        {/* Glass-specific */}
+        {material === 'glass' && (
+          <>
+            <SliderRow label="Thickness" value={opacity} onChange={setOpacity} />
+            <SliderRow label="Transmission" value={transmission} onChange={setTransmission} />
+            <SliderRow label="IOR" value={ior} onChange={setIor} min={1.0} max={2.5} step={0.05} />
+            <SliderRow label="Reflectivity" value={reflectivity} onChange={setReflectivity} />
+          </>
+        )}
+
+        {/* Metal-specific */}
+        {material === 'metallic' && (
+          <SliderRow label="Metalness" value={metalness} onChange={setMetalness} />
+        )}
+
+        {/* Plastic-specific */}
+        {material === 'plastic' && (
+          <>
+            <SliderRow label="Clearcoat" value={clearcoat} onChange={setClearcoat} />
+            <SliderRow label="Metalness" value={metalness} onChange={setMetalness} />
+          </>
+        )}
+
+        {/* Glossy-specific */}
+        {material === 'glossy' && (
+          <SliderRow label="Metalness" value={metalness} onChange={setMetalness} />
+        )}
       </div>
     </div>
   );

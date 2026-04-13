@@ -61,6 +61,26 @@ SurfacePlane* Scene::surface(uint32_t id) {
     return nullptr;
 }
 
+uint32_t Scene::add_point_light(PointLight pl) {
+    pl.id = next_id_++;
+    point_lights_.push_back(std::move(pl));
+    return point_lights_.back().id;
+}
+
+void Scene::remove_point_light(uint32_t id) {
+    point_lights_.erase(
+        std::remove_if(point_lights_.begin(), point_lights_.end(),
+                        [id](const PointLight& l) { return l.id == id; }),
+        point_lights_.end());
+}
+
+PointLight* Scene::point_light(uint32_t id) {
+    for (auto& l : point_lights_) {
+        if (l.id == id) return &l;
+    }
+    return nullptr;
+}
+
 void Scene::snap_objects_to_surfaces() {
     for (auto& obj : objects_) {
         float half_h = obj.transform.scale * 0.5f; // approximate

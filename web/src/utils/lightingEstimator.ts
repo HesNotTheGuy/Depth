@@ -1,3 +1,15 @@
+export interface DetectedLight {
+  /** Normalized image position (0-1) of the bright spot center */
+  x: number;
+  y: number;
+  /** Relative intensity of the detected spot (0-1) */
+  intensity: number;
+  /** Hex color of the bright spot */
+  color: string;
+  /** Approximate radius in normalized coords */
+  radius: number;
+}
+
 export interface EstimatedLighting {
   brightness: number;       // 0–2 scale
   colorTemp: string;        // hex color of dominant light
@@ -5,6 +17,7 @@ export interface EstimatedLighting {
   lightElevation: number;   // 0–1, how high the light source is
   ambientColor: string;     // hex, average color for ambient fill
   contrast: number;         // 0–1, shadow hardness hint
+  detectedLights: DetectedLight[];  // bright spots found in the image
 }
 
 /**
@@ -96,6 +109,9 @@ export function estimateLighting(imageDataUrl: string): Promise<EstimatedLightin
       // Contrast: range of luminance
       const contrast = Math.min(1, (maxLum - minLum) / 255);
 
+      // Detect bright spots (potential light sources) via luma threshold
+      const detectedLights = detectBrightSpots(data, size);
+
       resolve({
         brightness,
         colorTemp,
@@ -103,10 +119,101 @@ export function estimateLighting(imageDataUrl: string): Promise<EstimatedLightin
         lightElevation: elevation,
         ambientColor,
         contrast,
+        detectedLights,
       });
     };
     img.src = imageDataUrl;
   });
+}
+
+/**
+ * Detect bright spots in the image that likely represent light sources.
+ * Uses a luma threshold + simple flood-fill clustering to find distinct
+ * bright regions and return their center, color, and intensity.
+ */
+function detectBrightSpots(data: Uint8ClampedArray, size: number): DetectedLight[] {
+  // Build luminance map
+  const lum = new Float32Array(size * size);
+  let maxLum = 0;
+  for (let i = 0; i < size * size; i++) {
+    const idx = i * 4;
+    const l = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+    lum[i] = l;
+    if (l > maxLum) maxLum = l;
+  }
+
+  // Threshold: pixels above 85% of max luminance are "bright"
+  const threshold = maxLum * 0.85;
+  if (maxLum < 100) return []; // image is too dark for meaningful detection
+
+  const visited = new Uint8Array(size * size);
+  const spots: DetectedLight[] = [];
+
+  // Simple flood-fill to cluster bright pixels
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = y * size + x;
+      if (visited[idx] || lum[idx] < threshold) continue;
+
+      // BFS flood fill
+      const queue = [{ x, y }];
+      visited[idx] = 1;
+      let sumX = 0, sumY = 0, sumR = 0, sumG = 0, sumB = 0, sumLum = 0;
+      let count = 0;
+      let minX = x, maxX = x, minY = y, maxY = y;
+
+      while (queue.length > 0) {
+        const p = queue.shift()!;
+        const pi = p.y * size + p.x;
+        const di = pi * 4;
+
+        sumX += p.x;
+        sumY += p.y;
+        sumR += data[di];
+        sumG += data[di + 1];
+        sumB += data[di + 2];
+        sumLum += lum[pi];
+        count++;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+
+        // Check 4-connected neighbors
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = p.x + dx, ny = p.y + dy;
+          if (nx < 0 || nx >= size || ny < 0 || ny >= size) continue;
+          const ni = ny * size + nx;
+          if (visited[ni] || lum[ni] < threshold) continue;
+          visited[ni] = 1;
+          queue.push({ x: nx, y: ny });
+        }
+      }
+
+      // Only keep clusters with at least 4 pixels (filter noise)
+      if (count < 4) continue;
+
+      const cx = sumX / count / size;
+      const cy = sumY / count / size;
+      const avgR = Math.round(sumR / count);
+      const avgG = Math.round(sumG / count);
+      const avgB = Math.round(sumB / count);
+      const avgLum = sumLum / count;
+      const radius = Math.max(maxX - minX, maxY - minY) / size / 2;
+
+      spots.push({
+        x: cx,
+        y: cy,
+        intensity: avgLum / 255,
+        color: rgbToHex(avgR, avgG, avgB),
+        radius: Math.max(0.02, radius),
+      });
+    }
+  }
+
+  // Sort by intensity descending, keep top 4
+  spots.sort((a, b) => b.intensity - a.intensity);
+  return spots.slice(0, 4);
 }
 
 function rgbToHex(r: number, g: number, b: number): string {

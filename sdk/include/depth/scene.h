@@ -77,6 +77,19 @@ struct DirectionalLight {
 };
 
 /**
+ * A positionable point light in the scene.
+ */
+struct PointLight {
+    uint32_t id = 0;
+    std::string name;
+    Vec3 position = {2.0f, 3.0f, 2.0f};
+    Color color = Color::white();
+    float intensity = 1.5f;
+    float range = 20.0f;       // max distance
+    bool visible = true;
+};
+
+/**
  * The complete scene description.
  *
  * This is the primary input to the Renderer. Build a Scene,
@@ -118,6 +131,12 @@ public:
     DirectionalLight& light() { return light_; }
     const DirectionalLight& light() const { return light_; }
 
+    // Point lights
+    uint32_t add_point_light(PointLight light);
+    void remove_point_light(uint32_t id);
+    PointLight* point_light(uint32_t id);
+    const std::vector<PointLight>& point_lights() const { return point_lights_; }
+
     // Ambient
     Color ambient_color() const { return ambient_color_; }
     void set_ambient_color(Color c) { ambient_color_ = c; }
@@ -134,6 +153,7 @@ private:
     std::vector<SurfacePlane> surfaces_;
     Camera camera_;
     DirectionalLight light_;
+    std::vector<PointLight> point_lights_;
     Color ambient_color_ = {0.4f, 0.4f, 0.4f, 1.0f};
     float ambient_intensity_ = 0.35f;
     float shadow_opacity_ = 0.5f;

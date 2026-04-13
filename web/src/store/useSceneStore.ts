@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { EstimatedLighting } from '../utils/lightingEstimator';
+import type { EstimatedLighting, DetectedLight } from '../utils/lightingEstimator';
 
 export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'custom';
 
@@ -13,6 +13,18 @@ export interface Vec3 {
 export interface Point2D {
   x: number;
   y: number;
+}
+
+/** A positionable light source in the 3D scene */
+export interface SceneLight {
+  id: string;
+  name: string;
+  position: Vec3;
+  color: string;
+  intensity: number;
+  /** Whether this was auto-detected from the image */
+  autoDetected: boolean;
+  visible: boolean;
 }
 
 /** A surface plane drawn by the user on the background image */
@@ -43,6 +55,15 @@ interface SceneState {
   objectColor: string;
   objectMaterial: 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
   objectRoughness: number;
+  objectMetalness: number;
+  objectTransmission: number;
+  objectIor: number;
+  objectClearcoat: number;
+  objectOpacity: number;
+  objectReflectivity: number;
+
+  // Scene lights (positionable point lights)
+  sceneLights: SceneLight[];
 
   // Surface planes
   surfaces: SurfacePlane[];
@@ -67,12 +88,21 @@ interface SceneState {
   setObjectColor: (color: string) => void;
   setObjectMaterial: (mat: SceneState['objectMaterial']) => void;
   setObjectRoughness: (r: number) => void;
+  setObjectMetalness: (m: number) => void;
+  setObjectTransmission: (t: number) => void;
+  setObjectIor: (i: number) => void;
+  setObjectClearcoat: (c: number) => void;
+  setObjectOpacity: (o: number) => void;
+  setObjectReflectivity: (r: number) => void;
   setBrightness: (b: number) => void;
   setLightAngle: (a: number) => void;
   setLightElevation: (e: number) => void;
   setLightColor: (c: string) => void;
   setShadowOpacity: (o: number) => void;
   setAutoLighting: (auto: boolean) => void;
+  addSceneLight: (light: SceneLight) => void;
+  updateSceneLight: (id: string, updates: Partial<SceneLight>) => void;
+  removeSceneLight: (id: string) => void;
   addSurface: (surface: SurfacePlane) => void;
   updateSurface: (id: string, updates: Partial<SurfacePlane>) => void;
   removeSurface: (id: string) => void;
@@ -91,12 +121,19 @@ const initialState = {
   objectColor: '#cccccc',
   objectMaterial: 'matte' as SceneState['objectMaterial'],
   objectRoughness: 0.7,
+  objectMetalness: 0,
+  objectTransmission: 1.0,
+  objectIor: 1.5,
+  objectClearcoat: 0.5,
+  objectOpacity: 1.0,
+  objectReflectivity: 0.5,
   brightness: 1.0,
   lightAngle: 45,
   lightElevation: 0.6,
   lightColor: '#ffffff',
   shadowOpacity: 0.5,
   autoLighting: true,
+  sceneLights: [] as SceneLight[],
   surfaces: [] as SurfacePlane[],
   snapToSurface: true,
 };
@@ -107,6 +144,22 @@ export const useSceneStore = create<SceneState>((set) => ({
   setBackgroundImage: (dataUrl) => set({ backgroundImage: dataUrl }),
   setEstimatedLighting: (lighting) => {
     if (lighting) {
+      // Convert detected bright spots to 3D scene lights
+      const sceneLights: SceneLight[] = (lighting.detectedLights || []).map((spot, i) => ({
+        id: crypto.randomUUID(),
+        name: `Light ${i + 1}`,
+        // Map 2D image position to 3D: x centered, y = height, z = depth from image Y
+        position: {
+          x: (spot.x - 0.5) * 8,
+          y: 1 + (1 - spot.y) * 5,
+          z: (spot.y - 0.5) * -4,
+        },
+        color: spot.color,
+        intensity: spot.intensity * 2,
+        autoDetected: true,
+        visible: true,
+      }));
+
       set({
         estimatedLighting: lighting,
         brightness: lighting.brightness,
@@ -114,6 +167,7 @@ export const useSceneStore = create<SceneState>((set) => ({
         lightElevation: lighting.lightElevation,
         lightColor: lighting.colorTemp,
         shadowOpacity: lighting.contrast * 0.6,
+        sceneLights,
       });
     } else {
       set({ estimatedLighting: null });
@@ -125,14 +179,35 @@ export const useSceneStore = create<SceneState>((set) => ({
   setObjectRotation: (rot) => set({ objectRotation: rot }),
   setObjectScale: (scale) => set({ objectScale: scale }),
   setObjectColor: (color) => set({ objectColor: color }),
-  setObjectMaterial: (mat) => set({ objectMaterial: mat }),
+  setObjectMaterial: (mat) => {
+    const defaults: Record<string, Partial<SceneState>> = {
+      matte:    { objectRoughness: 0.9, objectMetalness: 0, objectOpacity: 1.0 },
+      glossy:   { objectRoughness: 0.1, objectMetalness: 0, objectOpacity: 1.0 },
+      metallic: { objectRoughness: 0.3, objectMetalness: 1.0, objectOpacity: 1.0 },
+      glass:    { objectRoughness: 0.05, objectMetalness: 0, objectTransmission: 1.0, objectIor: 1.5, objectOpacity: 0.2, objectReflectivity: 0.5 },
+      plastic:  { objectRoughness: 0.4, objectMetalness: 0, objectClearcoat: 0.5, objectOpacity: 1.0 },
+    };
+    set({ objectMaterial: mat, ...defaults[mat] });
+  },
   setObjectRoughness: (r) => set({ objectRoughness: r }),
+  setObjectMetalness: (m) => set({ objectMetalness: m }),
+  setObjectTransmission: (t) => set({ objectTransmission: t }),
+  setObjectIor: (i) => set({ objectIor: i }),
+  setObjectClearcoat: (c) => set({ objectClearcoat: c }),
+  setObjectOpacity: (o) => set({ objectOpacity: o }),
+  setObjectReflectivity: (r) => set({ objectReflectivity: r }),
   setBrightness: (b) => set({ brightness: b }),
   setLightAngle: (a) => set({ lightAngle: a }),
   setLightElevation: (e) => set({ lightElevation: e }),
   setLightColor: (c) => set({ lightColor: c }),
   setShadowOpacity: (o) => set({ shadowOpacity: o }),
   setAutoLighting: (auto) => set({ autoLighting: auto }),
+  addSceneLight: (light) => set((s) => ({ sceneLights: [...s.sceneLights, light] })),
+  updateSceneLight: (id, updates) =>
+    set((s) => ({
+      sceneLights: s.sceneLights.map((l) => (l.id === id ? { ...l, ...updates } : l)),
+    })),
+  removeSceneLight: (id) => set((s) => ({ sceneLights: s.sceneLights.filter((l) => l.id !== id) })),
   addSurface: (surface) => set((s) => ({ surfaces: [...s.surfaces, surface] })),
   updateSurface: (id, updates) =>
     set((s) => ({
