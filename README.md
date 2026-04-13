@@ -75,13 +75,13 @@ cd web && npm install && npm run dev
 
 | | Web Prototype | C++ SDK |
 |---|---|---|
-| **Purpose** | Product validation, UX testing | Embeddable engine, acquisition asset |
+| **Purpose** | Interactive demo, UX testing | Embeddable library, native performance |
 | **Stack** | React + Three.js + TypeScript | C++20, zero dependencies |
 | **Performance** | WebGL (~60-70% native) | Native GPU (Vulkan/Metal planned) |
 | **Distribution** | URL — zero install | Static/dynamic library, C API |
-| **Target** | End users (designers) | Host applications (Adobe, Canva, etc.) |
+| **Target** | End users (designers) | Developers, desktop apps, plugins |
 
-The web app proves the product works. The C++ SDK is what ships inside another company's product.
+The web app is the fastest way to try the idea. The C++ SDK is the production-grade version for apps that need native performance.
 
 ---
 
