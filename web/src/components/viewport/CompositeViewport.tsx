@@ -13,9 +13,12 @@ function SceneLighting() {
   const lightElevation = useSceneStore((s) => s.lightElevation);
   const lightColor = useSceneStore((s) => s.lightColor);
   const shadowOpacity = useSceneStore((s) => s.shadowOpacity);
+  const shadowSoftness = useSceneStore((s) => s.shadowSoftness);
+  const shadowColor = useSceneStore((s) => s.shadowColor);
+  const surfaces = useSceneStore((s) => s.surfaces);
   const invalidate = useThree((s) => s.invalidate);
 
-  useEffect(() => { invalidate(); }, [brightness, lightAngle, lightElevation, lightColor, shadowOpacity, invalidate]);
+  useEffect(() => { invalidate(); }, [brightness, lightAngle, lightElevation, lightColor, shadowOpacity, shadowSoftness, shadowColor, surfaces, invalidate]);
 
   const dirRad = (lightAngle * Math.PI) / 180;
   const height = 2 + lightElevation * 6;
@@ -25,6 +28,15 @@ function SceneLighting() {
     height,
     Math.sin(dirRad) * dist,
   ];
+
+  // Place contact shadows on the lowest visible surface Y position, or Y=0 if none
+  const lowestSurfaceY = surfaces.length > 0
+    ? Math.min(...surfaces.filter((s) => s.visible).map((s) => s.position.y), 0)
+    : 0;
+  const shadowY = lowestSurfaceY - 0.01;
+
+  // Map softness (0-1) to blur radius (0.5-4)
+  const blurRadius = 0.5 + shadowSoftness * 3.5;
 
   return (
     <>
@@ -44,9 +56,10 @@ function SceneLighting() {
         shadow-camera-bottom={-3}
       />
       <ContactShadows
-        position={[0, -0.01, 0]}
+        position={[0, shadowY, 0]}
         opacity={shadowOpacity}
-        blur={2}
+        blur={blurRadius}
+        color={shadowColor}
         far={4}
         resolution={512}
       />

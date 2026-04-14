@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { EstimatedLighting } from '../utils/lightingEstimator';
 
-export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'custom';
+export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'custom';
 
 export interface Vec3 {
   x: number;
@@ -62,6 +62,12 @@ interface SceneState {
   objectOpacity: number;
   objectReflectivity: number;
 
+  // Texture / UV mapping
+  objectTexture: string | null;
+  textureRepeat: { x: number; y: number };
+  textureOffset: { x: number; y: number };
+  textureRotation: number;
+
   // Scene lights (positionable point lights)
   sceneLights: SceneLight[];
 
@@ -75,6 +81,8 @@ interface SceneState {
   lightElevation: number;
   lightColor: string;
   shadowOpacity: number;
+  shadowSoftness: number;
+  shadowColor: string;
   autoLighting: boolean;
 
   // Actions
@@ -94,11 +102,17 @@ interface SceneState {
   setObjectClearcoat: (c: number) => void;
   setObjectOpacity: (o: number) => void;
   setObjectReflectivity: (r: number) => void;
+  setObjectTexture: (dataUrl: string | null) => void;
+  setTextureRepeat: (repeat: { x: number; y: number }) => void;
+  setTextureOffset: (offset: { x: number; y: number }) => void;
+  setTextureRotation: (rotation: number) => void;
   setBrightness: (b: number) => void;
   setLightAngle: (a: number) => void;
   setLightElevation: (e: number) => void;
   setLightColor: (c: string) => void;
   setShadowOpacity: (o: number) => void;
+  setShadowSoftness: (s: number) => void;
+  setShadowColor: (c: string) => void;
   setAutoLighting: (auto: boolean) => void;
   addSceneLight: (light: SceneLight) => void;
   updateSceneLight: (id: string, updates: Partial<SceneLight>) => void;
@@ -127,11 +141,17 @@ const initialState = {
   objectClearcoat: 0.5,
   objectOpacity: 1.0,
   objectReflectivity: 0.5,
+  objectTexture: null as string | null,
+  textureRepeat: { x: 1, y: 1 },
+  textureOffset: { x: 0, y: 0 },
+  textureRotation: 0,
   brightness: 1.0,
   lightAngle: 45,
   lightElevation: 0.6,
   lightColor: '#ffffff',
   shadowOpacity: 0.5,
+  shadowSoftness: 0.5,
+  shadowColor: '#000000',
   autoLighting: true,
   sceneLights: [] as SceneLight[],
   surfaces: [] as SurfacePlane[],
@@ -196,11 +216,17 @@ export const useSceneStore = create<SceneState>((set) => ({
   setObjectClearcoat: (c) => set({ objectClearcoat: c }),
   setObjectOpacity: (o) => set({ objectOpacity: o }),
   setObjectReflectivity: (r) => set({ objectReflectivity: r }),
+  setObjectTexture: (dataUrl) => set({ objectTexture: dataUrl }),
+  setTextureRepeat: (repeat) => set({ textureRepeat: repeat }),
+  setTextureOffset: (offset) => set({ textureOffset: offset }),
+  setTextureRotation: (rotation) => set({ textureRotation: rotation }),
   setBrightness: (b) => set({ brightness: b }),
   setLightAngle: (a) => set({ lightAngle: a }),
   setLightElevation: (e) => set({ lightElevation: e }),
   setLightColor: (c) => set({ lightColor: c }),
   setShadowOpacity: (o) => set({ shadowOpacity: o }),
+  setShadowSoftness: (s) => set({ shadowSoftness: s }),
+  setShadowColor: (c) => set({ shadowColor: c }),
   setAutoLighting: (auto) => set({ autoLighting: auto }),
   addSceneLight: (light) => set((s) => ({ sceneLights: [...s.sceneLights, light] })),
   updateSceneLight: (id, updates) =>

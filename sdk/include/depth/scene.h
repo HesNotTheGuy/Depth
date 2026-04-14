@@ -146,6 +146,10 @@ public:
     // Shadow
     float shadow_opacity() const { return shadow_opacity_; }
     void set_shadow_opacity(float o) { shadow_opacity_ = o; }
+    float shadow_softness() const { return shadow_softness_; }
+    void set_shadow_softness(float s) { shadow_softness_ = s; }
+    Color shadow_color() const { return shadow_color_; }
+    void set_shadow_color(Color c) { shadow_color_ = c; }
 
 private:
     Image background_;
@@ -157,6 +161,8 @@ private:
     Color ambient_color_ = {0.4f, 0.4f, 0.4f, 1.0f};
     float ambient_intensity_ = 0.35f;
     float shadow_opacity_ = 0.5f;
+    float shadow_softness_ = 0.5f;
+    Color shadow_color_ = Color::black();
     uint32_t next_id_ = 1;
 };
 

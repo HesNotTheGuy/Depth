@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 import { useSceneStore, type ObjectPreset, type Vec3 } from '../../store/useSceneStore';
-import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X } from 'lucide-react';
+import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard } from 'lucide-react';
 
 const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'box', label: 'Cube', icon: <Box size={18} /> },
@@ -8,6 +8,14 @@ const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'sphere', label: 'Sphere', icon: <Circle size={18} /> },
   { id: 'cone', label: 'Cone', icon: <Triangle size={18} /> },
   { id: 'torus', label: 'Torus', icon: <Hexagon size={18} /> },
+];
+
+const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
+  { id: 'mug', label: 'Mug', icon: <Coffee size={18} /> },
+  { id: 'phone', label: 'Phone', icon: <Smartphone size={18} /> },
+  { id: 'bottle', label: 'Bottle', icon: <Wine size={18} /> },
+  { id: 'bag', label: 'Bag', icon: <ShoppingBag size={18} /> },
+  { id: 'card', label: 'Card', icon: <CreditCard size={18} /> },
 ];
 
 function Slider({
@@ -127,6 +135,27 @@ export function ObjectPanel() {
       </label>
       <div className="grid grid-cols-5 gap-1.5 mb-2">
         {shapes.map((shape) => (
+          <button
+            key={shape.id}
+            onClick={() => setObjectType(shape.id)}
+            className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] font-medium transition-all ${
+              objectType === shape.id
+                ? 'bg-primary/15 text-primary ring-1 ring-primary/30'
+                : 'bg-white/[0.03] text-text-muted hover:bg-white/[0.06] hover:text-text-secondary'
+            }`}
+            title={shape.label}
+          >
+            {shape.icon}
+            <span>{shape.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block mt-4">
+        Mockups
+      </label>
+      <div className="grid grid-cols-5 gap-1.5 mb-2">
+        {mockups.map((shape) => (
           <button
             key={shape.id}
             onClick={() => setObjectType(shape.id)}

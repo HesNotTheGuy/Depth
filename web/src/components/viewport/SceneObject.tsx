@@ -2,6 +2,7 @@ import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { useSceneStore } from '../../store/useSceneStore';
 import { findSurfaceBelow } from '../../utils/surfaceUtils';
 
@@ -75,6 +76,10 @@ export function SceneObject() {
   const surfaces = useSceneStore((s) => s.surfaces);
   const snapToSurface = useSceneStore((s) => s.snapToSurface);
   const setObjectPosition = useSceneStore((s) => s.setObjectPosition);
+  const objectTexture = useSceneStore((s) => s.objectTexture);
+  const textureRepeat = useSceneStore((s) => s.textureRepeat);
+  const textureOffset = useSceneStore((s) => s.textureOffset);
+  const textureRotation = useSceneStore((s) => s.textureRotation);
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
@@ -85,10 +90,36 @@ export function SceneObject() {
     objectType === 'custom' ? customModelUrl : null
   );
 
+  // Load texture from data URL
+  const [loadedTexture, setLoadedTexture] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    if (!objectTexture) {
+      setLoadedTexture(null);
+      return;
+    }
+    const loader = new THREE.TextureLoader();
+    loader.load(objectTexture, (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      setLoadedTexture(tex);
+    });
+  }, [objectTexture]);
+
+  // Update texture transform parameters
+  useEffect(() => {
+    if (!loadedTexture) return;
+    loadedTexture.repeat.set(textureRepeat.x, textureRepeat.y);
+    loadedTexture.offset.set(textureOffset.x, textureOffset.y);
+    loadedTexture.rotation = textureRotation;
+    loadedTexture.needsUpdate = true;
+    invalidate();
+  }, [loadedTexture, textureRepeat, textureOffset, textureRotation, invalidate]);
+
   // Invalidate on any prop change so demand-mode canvas re-renders
   useEffect(() => {
     invalidate();
-  }, [objectType, customModelUrl, position, rotation, scale, color, material, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity, invalidate]);
+  }, [objectType, customModelUrl, position, rotation, scale, color, material, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity, loadedTexture, invalidate]);
 
   // Snap to surface when position/surfaces change
   useEffect(() => {
@@ -110,6 +141,87 @@ export function SceneObject() {
       case 'sphere': return new THREE.SphereGeometry(0.5, 32, 32);
       case 'cone': return new THREE.ConeGeometry(0.5, 1, 32);
       case 'torus': return new THREE.TorusGeometry(0.4, 0.15, 16, 32);
+
+      // --- Mockup presets ---
+
+      case 'mug': {
+        const body = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
+        const handle = new THREE.TorusGeometry(0.18, 0.04, 12, 24, Math.PI);
+        handle.rotateZ(Math.PI / 2);
+        handle.translate(0.35, 0, 0);
+        return mergeGeometries([body, handle], false) ?? body;
+      }
+
+      case 'phone': {
+        const w = 0.38;
+        const h = 0.75;
+        const r = 0.06;
+        const shape = new THREE.Shape();
+        shape.moveTo(-w + r, -h);
+        shape.lineTo(w - r, -h);
+        shape.quadraticCurveTo(w, -h, w, -h + r);
+        shape.lineTo(w, h - r);
+        shape.quadraticCurveTo(w, h, w - r, h);
+        shape.lineTo(-w + r, h);
+        shape.quadraticCurveTo(-w, h, -w, h - r);
+        shape.lineTo(-w, -h + r);
+        shape.quadraticCurveTo(-w, -h, -w + r, -h);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 3 });
+        geo.rotateX(-Math.PI / 2);
+        geo.translate(0, 0.75, 0);
+        geo.computeBoundingBox();
+        const center = new THREE.Vector3();
+        geo.boundingBox!.getCenter(center);
+        geo.translate(-center.x, -center.y, -center.z);
+        return geo;
+      }
+
+      case 'bottle': {
+        const pts: THREE.Vector2[] = [];
+        pts.push(new THREE.Vector2(0, 0));
+        pts.push(new THREE.Vector2(0.25, 0));
+        pts.push(new THREE.Vector2(0.25, 0.6));
+        pts.push(new THREE.Vector2(0.22, 0.65));
+        pts.push(new THREE.Vector2(0.1, 0.8));
+        pts.push(new THREE.Vector2(0.08, 0.8));
+        pts.push(new THREE.Vector2(0.08, 1.0));
+        pts.push(new THREE.Vector2(0.1, 1.0));
+        pts.push(new THREE.Vector2(0.1, 1.05));
+        pts.push(new THREE.Vector2(0, 1.05));
+        const geo = new THREE.LatheGeometry(pts, 32);
+        geo.translate(0, -0.525, 0);
+        return geo;
+      }
+
+      case 'bag': {
+        const bw = 0.4, tw = 0.45, depth = 0.25, bagH = 0.9;
+        const bagShape = new THREE.Shape();
+        bagShape.moveTo(-bw, 0);
+        bagShape.lineTo(bw, 0);
+        bagShape.lineTo(tw, bagH);
+        bagShape.lineTo(-tw, bagH);
+        bagShape.closePath();
+        const bagGeo = new THREE.ExtrudeGeometry(bagShape, { depth, bevelEnabled: false });
+        bagGeo.translate(0, 0, -depth / 2);
+        const handleL = new THREE.TorusGeometry(0.1, 0.015, 8, 16, Math.PI);
+        handleL.translate(-0.2, bagH, 0);
+        const handleR = new THREE.TorusGeometry(0.1, 0.015, 8, 16, Math.PI);
+        handleR.translate(0.2, bagH, 0);
+        const merged = mergeGeometries([bagGeo, handleL, handleR], false);
+        if (merged) {
+          merged.computeBoundingBox();
+          const c = new THREE.Vector3();
+          merged.boundingBox!.getCenter(c);
+          merged.translate(-c.x, -c.y, -c.z);
+          return merged;
+        }
+        return bagGeo;
+      }
+
+      case 'card': {
+        return new THREE.BoxGeometry(0.875, 0.5, 0.01);
+      }
+
       default: return null;
     }
   }, [objectType]);
@@ -152,8 +264,12 @@ export function SceneObject() {
     if (material === 'plastic') {
       base.clearcoat = clearcoat;
     }
+    // Apply texture map — multiplies with base color
+    if (loadedTexture) {
+      base.map = loadedTexture;
+    }
     return base;
-  }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity]);
+  }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity, loadedTexture]);
 
   // Drag to reposition object in screen-space XY
   const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -218,6 +334,11 @@ function getObjectHalfHeight(type: string, scale: number): number {
     case 'sphere': return 0.5 * scale;
     case 'cone': return 0.5 * scale;
     case 'torus': return 0.15 * scale;
+    case 'mug': return 0.4 * scale;
+    case 'phone': return 0.75 * scale;
+    case 'bottle': return 0.525 * scale;
+    case 'bag': return 0.5 * scale;
+    case 'card': return 0.25 * scale;
     case 'custom': return 0.5 * scale;
     default: return 0.5 * scale;
   }

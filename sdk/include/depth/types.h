@@ -90,6 +90,13 @@ enum class GeometryType : uint8_t {
     Torus,
     Plane,
     Custom,  // loaded from mesh file
+
+    // Mockup geometry types (matching web app)
+    Mug,
+    Phone,
+    Bottle,
+    Bag,
+    Card,
 };
 
 /// Result type for operations that can fail

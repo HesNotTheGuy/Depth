@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+import { Image, Upload, X, RotateCcw } from 'lucide-react';
 import { useSceneStore } from '../../store/useSceneStore';
 
 type MatPreset = 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
@@ -76,6 +78,32 @@ export function MaterialPanel() {
   const setClearcoat = useSceneStore((s) => s.setObjectClearcoat);
   const setOpacity = useSceneStore((s) => s.setObjectOpacity);
   const setReflectivity = useSceneStore((s) => s.setObjectReflectivity);
+  const objectTexture = useSceneStore((s) => s.objectTexture);
+  const textureRepeat = useSceneStore((s) => s.textureRepeat);
+  const textureOffset = useSceneStore((s) => s.textureOffset);
+  const textureRotation = useSceneStore((s) => s.textureRotation);
+  const setObjectTexture = useSceneStore((s) => s.setObjectTexture);
+  const setTextureRepeat = useSceneStore((s) => s.setTextureRepeat);
+  const setTextureOffset = useSceneStore((s) => s.setTextureOffset);
+  const setTextureRotation = useSceneStore((s) => s.setTextureRotation);
+  const textureInputRef = useRef<HTMLInputElement>(null);
+
+  const handleTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setObjectTexture(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const resetTextureTransform = () => {
+    setTextureRepeat({ x: 1, y: 1 });
+    setTextureOffset({ x: 0, y: 0 });
+    setTextureRotation(0);
+  };
 
   return (
     <div>
@@ -153,6 +181,62 @@ export function MaterialPanel() {
           />
         ))}
       </div>
+
+      {/* Texture / Label */}
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
+        Texture
+      </label>
+      {objectTexture ? (
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/[0.04]">
+              <img src={objectTexture} alt="Texture" className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[11px] text-text-primary font-medium flex items-center gap-1.5">
+                <Image size={12} className="text-primary shrink-0" />
+                Texture loaded
+              </div>
+            </div>
+            <button
+              onClick={resetTextureTransform}
+              className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-primary transition-colors"
+              title="Reset transform"
+            >
+              <RotateCcw size={12} />
+            </button>
+            <button
+              onClick={() => setObjectTexture(null)}
+              className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-red-400 transition-colors"
+              title="Remove texture"
+            >
+              <X size={12} />
+            </button>
+          </div>
+          <div className="space-y-2">
+            <SliderRow label="Repeat X" value={textureRepeat.x} onChange={(v) => setTextureRepeat({ ...textureRepeat, x: v })} min={0.1} max={10} step={0.1} displayValue={textureRepeat.x.toFixed(1)} />
+            <SliderRow label="Repeat Y" value={textureRepeat.y} onChange={(v) => setTextureRepeat({ ...textureRepeat, y: v })} min={0.1} max={10} step={0.1} displayValue={textureRepeat.y.toFixed(1)} />
+            <SliderRow label="Offset X" value={textureOffset.x} onChange={(v) => setTextureOffset({ ...textureOffset, x: v })} min={0} max={1} step={0.01} />
+            <SliderRow label="Offset Y" value={textureOffset.y} onChange={(v) => setTextureOffset({ ...textureOffset, y: v })} min={0} max={1} step={0.01} />
+            <SliderRow label="Rotation" value={textureRotation} onChange={setTextureRotation} min={0} max={6.283} step={0.01} displayValue={`${Math.round(textureRotation * 180 / Math.PI)}°`} />
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => textureInputRef.current?.click()}
+          className="w-full mb-5 flex items-center justify-center gap-2 py-2 border border-dashed border-white/10 hover:border-primary/30 rounded-lg text-[11px] text-text-muted hover:text-primary transition-all"
+        >
+          <Upload size={13} />
+          Upload texture / label
+        </button>
+      )}
+      <input
+        ref={textureInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleTextureUpload}
+      />
 
       {/* Common controls */}
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">

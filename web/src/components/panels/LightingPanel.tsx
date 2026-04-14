@@ -7,6 +7,8 @@ export function LightingPanel() {
   const lightElevation = useSceneStore((s) => s.lightElevation);
   const lightColor = useSceneStore((s) => s.lightColor);
   const shadowOpacity = useSceneStore((s) => s.shadowOpacity);
+  const shadowSoftness = useSceneStore((s) => s.shadowSoftness);
+  const shadowColor = useSceneStore((s) => s.shadowColor);
   const autoLighting = useSceneStore((s) => s.autoLighting);
   const estimatedLighting = useSceneStore((s) => s.estimatedLighting);
   const sceneLights = useSceneStore((s) => s.sceneLights);
@@ -16,6 +18,8 @@ export function LightingPanel() {
   const setLightElevation = useSceneStore((s) => s.setLightElevation);
   const setLightColor = useSceneStore((s) => s.setLightColor);
   const setShadowOpacity = useSceneStore((s) => s.setShadowOpacity);
+  const setShadowSoftness = useSceneStore((s) => s.setShadowSoftness);
+  const setShadowColor = useSceneStore((s) => s.setShadowColor);
   const setAutoLighting = useSceneStore((s) => s.setAutoLighting);
   const setEstimatedLighting = useSceneStore((s) => s.setEstimatedLighting);
   const addSceneLight = useSceneStore((s) => s.addSceneLight);
@@ -98,14 +102,43 @@ export function LightingPanel() {
         step={0.05}
         onChange={(v) => { setLightElevation(v); setAutoLighting(false); }}
       />
+      {/* Shadows subsection */}
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mt-5 mb-2.5 block">
+        Shadows
+      </label>
       <SliderControl
-        label="Shadow"
+        label="Opacity"
         value={shadowOpacity}
         min={0}
         max={1}
         step={0.05}
         onChange={(v) => { setShadowOpacity(v); setAutoLighting(false); }}
       />
+      <SliderControl
+        label="Softness"
+        value={shadowSoftness}
+        min={0}
+        max={1}
+        step={0.05}
+        onChange={(v) => { setShadowSoftness(v); setAutoLighting(false); }}
+      />
+      <div className="mb-3">
+        <label className="text-[11px] text-text-muted font-medium mb-2 block">Shadow Color</label>
+        <div className="flex items-center gap-2.5">
+          <input
+            type="color"
+            value={shadowColor}
+            onChange={(e) => { setShadowColor(e.target.value); setAutoLighting(false); }}
+            className="w-8 h-8 rounded-lg cursor-pointer"
+          />
+          <input
+            type="text"
+            value={shadowColor}
+            onChange={(e) => { setShadowColor(e.target.value); setAutoLighting(false); }}
+            className="flex-1 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
+          />
+        </div>
+      </div>
 
       <div className="mt-3 mb-5">
         <label className="text-[11px] text-text-muted font-medium mb-2 block">Light Color</label>
