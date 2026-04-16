@@ -47,11 +47,13 @@ render_composite(*Renderer::create(), scene).save("output.png");
 Interactive browser demo built with React 19, Three.js (React Three Fiber), Zustand, and Tailwind CSS v4.
 
 - Upload a background photo → auto-analyze lighting
-- Pick from 5 primitive shapes, adjust position/scale/rotation
+- Pick from 5 primitive shapes + 6 mockup objects (mug, phone, bottle, bag, card, donut)
 - Choose material presets (matte, glossy, metal, glass, plastic) with color swatches
+- Per-face texture placement — click a face, upload a label/logo, adjust UV
 - Draw surface planes on the image for object collision/snapping
-- Fine-tune lighting direction, height, shadow, and color
-- Export composite as PNG/WebP/JPEG (or copy to clipboard)
+- Fine-tune lighting direction, height, shadow softness/color, and point lights
+- Scene templates — one-click presets for common product shot setups
+- Export composite as PNG at 1x/2x/4x resolution, or export layered passes
 
 ```bash
 cd web && npm install && npm run dev
