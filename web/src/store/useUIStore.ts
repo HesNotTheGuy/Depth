@@ -14,6 +14,10 @@ interface UIState {
   isDrawing: boolean;
   drawingPoints: Point2D[];
 
+  // Canvas zoom/pan
+  canvasZoom: number;      // 1 = 100%, 0.5 = 50%, 2 = 200%
+  canvasPan: { x: number; y: number }; // offset in pixels
+
   setStep: (step: AppStep) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setShowExportModal: (show: boolean) => void;
@@ -22,6 +26,9 @@ interface UIState {
   addDrawingPoint: (point: Point2D) => void;
   cancelDrawing: () => void;
   finishDrawing: () => void;
+  setCanvasZoom: (zoom: number) => void;
+  setCanvasPan: (pan: { x: number; y: number }) => void;
+  fitToScreen: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -31,6 +38,8 @@ export const useUIStore = create<UIState>((set) => ({
   isAnalyzing: false,
   isDrawing: false,
   drawingPoints: [],
+  canvasZoom: 1,
+  canvasPan: { x: 0, y: 0 },
 
   setStep: (step) => set({ step }),
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -44,4 +53,7 @@ export const useUIStore = create<UIState>((set) => ({
     }),
   cancelDrawing: () => set({ isDrawing: false, drawingPoints: [] }),
   finishDrawing: () => set({ isDrawing: false, drawingPoints: [] }),
+  setCanvasZoom: (zoom) => set({ canvasZoom: Math.max(0.1, Math.min(5, zoom)) }),
+  setCanvasPan: (pan) => set({ canvasPan: pan }),
+  fitToScreen: () => set({ canvasZoom: 1, canvasPan: { x: 0, y: 0 } }),
 }));
