@@ -59,15 +59,41 @@ export function cornersTo3DPlane(corners: [Point2D, Point2D, Point2D, Point2D]):
 }
 
 /**
- * Sort 4 points into top-left, top-right, bottom-right, bottom-left order.
+ * Sort 4 points into a proper convex polygon winding order (CCW).
+ * Uses centroid + angle sorting to avoid bowtie/crossed edges
+ * that occur with naive Y-then-X sorting on perspective quads.
  */
 function sortCorners(pts: Point2D[]): [Point2D, Point2D, Point2D, Point2D] {
-  const sorted = [...pts];
-  // Sort by Y first to split into top pair and bottom pair
-  sorted.sort((a, b) => a.y - b.y);
-  const topPair = sorted.slice(0, 2).sort((a, b) => a.x - b.x); // left, right
-  const bottomPair = sorted.slice(2, 4).sort((a, b) => a.x - b.x); // left, right
-  return [topPair[0], topPair[1], bottomPair[1], bottomPair[0]]; // TL, TR, BR, BL
+  // Compute centroid
+  const cx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+  const cy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+
+  // Sort by angle from centroid (CCW winding)
+  const sorted = [...pts].sort((a, b) => {
+    const angleA = Math.atan2(a.y - cy, a.x - cx);
+    const angleB = Math.atan2(b.y - cy, b.x - cx);
+    return angleA - angleB;
+  });
+
+  // Rotate so the top-left-most point is first
+  // (smallest x+y sum = closest to top-left corner)
+  let bestIdx = 0;
+  let bestSum = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const sum = sorted[i].x + sorted[i].y;
+    if (sum < bestSum) {
+      bestSum = sum;
+      bestIdx = i;
+    }
+  }
+  const rotated = [
+    sorted[bestIdx],
+    sorted[(bestIdx + 1) % 4],
+    sorted[(bestIdx + 2) % 4],
+    sorted[(bestIdx + 3) % 4],
+  ];
+
+  return rotated as [Point2D, Point2D, Point2D, Point2D];
 }
 
 /**
