@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Depth SDK — WASM Demo</title>
+<style>
+  body { margin: 0; background: #1a1a2e; color: #e0e0e0; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; }
+  h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+  p { font-size: 0.9rem; color: #888; margin-bottom: 1rem; }
+  canvas { border: 1px solid #333; border-radius: 4px; }
+  #status { margin-top: 0.8rem; font-size: 0.85rem; color: #6c6; }
+</style>
+</head>
+<body>
+
+<h1>Depth SDK — WebAssembly</h1>
+<p>Software-rendered 3D mug, running entirely in the browser.</p>
+<canvas id="canvas" width="640" height="480"></canvas>
+<div id="status">Loading WASM module...</div>
+
+<script type="module">
+import DepthModule from '../build-wasm/depth.js';
+
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+const status  = document.getElementById('status');
+const W       = canvas.width;
+const H       = canvas.height;
+
+async function main() {
+  // Initialize the WASM module
+  const depth = await DepthModule();
+  status.textContent = `Module loaded — SDK ${depth._depth_wasm_version ? 'v' + depth.UTF8ToString(depth._depth_wasm_version()) : '(embind)'}`;
+
+  // --- Use the Embind API (cleaner) if available, else fall back to C API ---
+  let pixels;
+
+  if (depth.Scene) {
+    // Embind path
+    const scene = new depth.Scene();
+    const objId = scene.addObject(depth.GeometryType.Mug.value);
+    scene.setObjectTransform(objId, 0, 0, 0,  0, 0.3, 0,  1.0);
+    scene.setObjectMaterial(objId, depth.MaterialPreset.Glossy.value,
+                            0.85, 0.25, 0.20, 0.3, 0.0);
+    scene.setLight(45, 0.6, 1.8, 1.0, 0.95, 0.9);
+    scene.setAmbient(0.4, 0.45, 0.55, 0.35);
+
+    const result = scene.render(W, H);
+    if (result) {
+      pixels = new Uint8ClampedArray(result);
+    }
+    scene.delete();  // prevent leak
+  } else {
+    // C API path (cwrap)
+    const create       = depth.cwrap('depth_wasm_scene_create',            'number', []);
+    const destroy      = depth.cwrap('depth_wasm_scene_destroy',           null,     ['number']);
+    const addObj       = depth.cwrap('depth_wasm_scene_add_object',        'number', ['number', 'number']);
+    const setTransform = depth.cwrap('depth_wasm_scene_set_object_transform', null,
+                           ['number','number','number','number','number','number','number','number','number']);
+    const setMaterial  = depth.cwrap('depth_wasm_scene_set_object_material', null,
+                           ['number','number','number','number','number','number','number','number']);
+    const render       = depth.cwrap('depth_wasm_render',                  'number', ['number','number','number']);
+    const freePixels   = depth.cwrap('depth_wasm_free_pixels',             null,     ['number']);
+
+    const scene = create();
+    const objId = addObj(scene, 7);  // GeometryType::Mug = 7
+    setTransform(scene, objId, 0, 0, 0, 0, 0.3, 0, 1.0);
+    setMaterial(scene, objId, 1, 0.85, 0.25, 0.20, 0.3, 0.0);  // Glossy red
+
+    const ptr = render(scene, W, H);
+    if (ptr) {
+      pixels = new Uint8ClampedArray(depth.HEAPU8.buffer, ptr, W * H * 4);
+      freePixels(ptr);
+    }
+    destroy(scene);
+  }
+
+  // Paint to canvas
+  if (pixels && pixels.length === W * H * 4) {
+    const imageData = new ImageData(pixels, W, H);
+    ctx.putImageData(imageData, 0, 0);
+    status.textContent = `Rendered ${W}x${H} — ${(W * H * 4 / 1024).toFixed(0)} KB RGBA`;
+  } else {
+    status.textContent = 'Render returned no pixels (check console).';
+  }
+}
+
+main().catch(err => {
+  status.textContent = `Error: ${err.message}`;
+  console.error(err);
+});
+</script>
+
+</body>
+</html>

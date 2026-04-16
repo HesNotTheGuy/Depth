@@ -2,6 +2,7 @@ import { Suspense, useEffect, useCallback } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Environment, ContactShadows } from '@react-three/drei';
 import { useSceneStore } from '../../store/useSceneStore';
+import { useExportStore } from '../../store/useExportStore';
 import { SceneObject } from './SceneObject';
 import { BackgroundPlane } from './BackgroundPlane';
 import { SceneLights } from './SceneLights';
@@ -67,6 +68,21 @@ function SceneLighting() {
   );
 }
 
+/** Captures Three.js internals into the export store so panels outside
+ *  the Canvas can trigger renders. */
+function ThreeRefCapture() {
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const camera = useThree((s) => s.camera);
+  const setThreeRefs = useExportStore((s) => s.setThreeRefs);
+
+  useEffect(() => {
+    setThreeRefs(gl, scene, camera);
+  }, [gl, scene, camera, setThreeRefs]);
+
+  return null;
+}
+
 export function CompositeViewport() {
   const scale = useSceneStore((s) => s.objectScale);
   const setScale = useSceneStore((s) => s.setObjectScale);
@@ -92,6 +108,7 @@ export function CompositeViewport() {
         camera={{ position: [0, 0.5, 4], fov: 45, near: 0.1, far: 50 }}
         style={{ position: 'absolute', inset: 0 }}
       >
+        <ThreeRefCapture />
         <Suspense fallback={null}>
           <BackgroundPlane />
           <SceneLighting />

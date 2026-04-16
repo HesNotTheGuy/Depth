@@ -1,6 +1,6 @@
 import { useRef } from 'react';
-import { Image, Upload, X, RotateCcw } from 'lucide-react';
-import { useSceneStore } from '../../store/useSceneStore';
+import { Image, Upload, X, RotateCcw, MousePointerClick, Layers } from 'lucide-react';
+import { useSceneStore, type FaceTextureConfig } from '../../store/useSceneStore';
 
 type MatPreset = 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
 
@@ -86,7 +86,17 @@ export function MaterialPanel() {
   const setTextureRepeat = useSceneStore((s) => s.setTextureRepeat);
   const setTextureOffset = useSceneStore((s) => s.setTextureOffset);
   const setTextureRotation = useSceneStore((s) => s.setTextureRotation);
+  const selectedFace = useSceneStore((s) => s.selectedFace);
+  const faceTextures = useSceneStore((s) => s.faceTextures);
+  const setSelectedFace = useSceneStore((s) => s.setSelectedFace);
+  const setFaceTexture = useSceneStore((s) => s.setFaceTexture);
+  const removeFaceTexture = useSceneStore((s) => s.removeFaceTexture);
+  const setFaceTextureTransform = useSceneStore((s) => s.setFaceTextureTransform);
   const textureInputRef = useRef<HTMLInputElement>(null);
+  const faceTextureInputRef = useRef<HTMLInputElement>(null);
+
+  const activeFaceConfig: FaceTextureConfig | null =
+    selectedFace ? faceTextures[selectedFace] ?? null : null;
 
   const handleTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,10 +109,30 @@ export function MaterialPanel() {
     e.target.value = '';
   };
 
+  const handleFaceTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedFace) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFaceTexture(selectedFace, reader.result as string);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
   const resetTextureTransform = () => {
     setTextureRepeat({ x: 1, y: 1 });
     setTextureOffset({ x: 0, y: 0 });
     setTextureRotation(0);
+  };
+
+  const resetFaceTextureTransform = () => {
+    if (!selectedFace) return;
+    setFaceTextureTransform(selectedFace, {
+      repeat: { x: 1, y: 1 },
+      offset: { x: 0, y: 0 },
+      rotation: 0,
+    });
   };
 
   return (
@@ -182,9 +212,114 @@ export function MaterialPanel() {
         ))}
       </div>
 
-      {/* Texture / Label */}
+      {/* Face Selection */}
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
-        Texture
+        Face Placement
+      </label>
+      {selectedFace ? (
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-2.5 px-3 py-2 rounded-lg bg-primary/10 ring-1 ring-primary/25">
+            <MousePointerClick size={14} className="text-primary shrink-0" />
+            <span className="text-xs text-primary font-medium capitalize flex-1">
+              Selected: {selectedFace}
+            </span>
+            <button
+              onClick={() => setSelectedFace(null)}
+              className="p-1 hover:bg-white/10 rounded text-primary/60 hover:text-primary transition-colors"
+              title="Clear selection"
+            >
+              <X size={12} />
+            </button>
+          </div>
+
+          {/* Per-face texture controls */}
+          {activeFaceConfig ? (
+            <div className="mb-3">
+              <div className="flex items-center gap-2 mb-2.5">
+                <div className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/[0.04]">
+                  <img src={activeFaceConfig.url} alt={`${selectedFace} texture`} className="w-full h-full object-cover" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] text-text-primary font-medium flex items-center gap-1.5">
+                    <Layers size={12} className="text-primary shrink-0" />
+                    <span className="capitalize">{selectedFace} texture</span>
+                  </div>
+                </div>
+                <button
+                  onClick={resetFaceTextureTransform}
+                  className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-primary transition-colors"
+                  title="Reset transform"
+                >
+                  <RotateCcw size={12} />
+                </button>
+                <button
+                  onClick={() => removeFaceTexture(selectedFace)}
+                  className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-red-400 transition-colors"
+                  title="Remove face texture"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <div className="space-y-2">
+                <SliderRow label="Repeat X" value={activeFaceConfig.repeat.x} onChange={(v) => setFaceTextureTransform(selectedFace, { repeat: { x: v, y: activeFaceConfig.repeat.y } })} min={0.1} max={10} step={0.1} displayValue={activeFaceConfig.repeat.x.toFixed(1)} />
+                <SliderRow label="Repeat Y" value={activeFaceConfig.repeat.y} onChange={(v) => setFaceTextureTransform(selectedFace, { repeat: { x: activeFaceConfig.repeat.x, y: v } })} min={0.1} max={10} step={0.1} displayValue={activeFaceConfig.repeat.y.toFixed(1)} />
+                <SliderRow label="Offset X" value={activeFaceConfig.offset.x} onChange={(v) => setFaceTextureTransform(selectedFace, { offset: { x: v, y: activeFaceConfig.offset.y } })} min={0} max={1} step={0.01} />
+                <SliderRow label="Offset Y" value={activeFaceConfig.offset.y} onChange={(v) => setFaceTextureTransform(selectedFace, { offset: { x: activeFaceConfig.offset.x, y: v } })} min={0} max={1} step={0.01} />
+                <SliderRow label="Rotation" value={activeFaceConfig.rotation} onChange={(v) => setFaceTextureTransform(selectedFace, { rotation: v })} min={0} max={6.283} step={0.01} displayValue={`${Math.round(activeFaceConfig.rotation * 180 / Math.PI)}°`} />
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => faceTextureInputRef.current?.click()}
+              className="w-full mb-3 flex items-center justify-center gap-2 py-2 border border-dashed border-primary/20 hover:border-primary/40 rounded-lg text-[11px] text-primary/70 hover:text-primary transition-all bg-primary/5"
+            >
+              <Upload size={13} />
+              Upload texture for {selectedFace}
+            </button>
+          )}
+          <input
+            ref={faceTextureInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFaceTextureUpload}
+          />
+        </div>
+      ) : (
+        <p className="text-[10px] text-text-muted mb-3">
+          Click a face on the 3D object to select it and apply a texture to that specific face.
+        </p>
+      )}
+
+      {/* Face texture thumbnails */}
+      {Object.keys(faceTextures).length > 0 && (
+        <div className="mb-3">
+          <span className="text-[10px] text-text-muted block mb-1.5">Applied face textures:</span>
+          <div className="flex gap-1.5 flex-wrap">
+            {Object.entries(faceTextures).map(([face, config]) => (
+              <button
+                key={face}
+                onClick={() => setSelectedFace(face)}
+                className={`relative group w-10 h-10 rounded-lg overflow-hidden border shrink-0 transition-all ${
+                  face === selectedFace
+                    ? 'ring-2 ring-primary border-primary/30'
+                    : 'border-white/10 hover:border-white/25'
+                }`}
+                title={face}
+              >
+                <img src={config.url} alt={face} className="w-full h-full object-cover" />
+                <span className="absolute bottom-0 inset-x-0 bg-black/70 text-[8px] text-white text-center py-0.5 capitalize leading-none">
+                  {face}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Global Texture / Label */}
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
+        Global Texture
       </label>
       {objectTexture ? (
         <div className="mb-3">
@@ -195,7 +330,7 @@ export function MaterialPanel() {
             <div className="flex-1 min-w-0">
               <div className="text-[11px] text-text-primary font-medium flex items-center gap-1.5">
                 <Image size={12} className="text-primary shrink-0" />
-                Texture loaded
+                All faces
               </div>
             </div>
             <button
@@ -227,7 +362,7 @@ export function MaterialPanel() {
           className="w-full mb-5 flex items-center justify-center gap-2 py-2 border border-dashed border-white/10 hover:border-primary/30 rounded-lg text-[11px] text-text-muted hover:text-primary transition-all"
         >
           <Upload size={13} />
-          Upload texture / label
+          Upload global texture
         </button>
       )}
       <input

@@ -27,6 +27,14 @@ export interface SceneLight {
   visible: boolean;
 }
 
+/** Per-face texture configuration */
+export interface FaceTextureConfig {
+  url: string;
+  repeat: { x: number; y: number };
+  offset: { x: number; y: number };
+  rotation: number;
+}
+
 /** A surface plane drawn by the user on the background image */
 export interface SurfacePlane {
   id: string;
@@ -68,12 +76,20 @@ interface SceneState {
   textureOffset: { x: number; y: number };
   textureRotation: number;
 
+  // Face-based texture system
+  faceTextures: Record<string, FaceTextureConfig>;
+  selectedFace: string | null;
+
   // Scene lights (positionable point lights)
   sceneLights: SceneLight[];
 
   // Surface planes
   surfaces: SurfacePlane[];
   snapToSurface: boolean;
+
+  // Export settings
+  exportScale: number;
+  exportFilename: string;
 
   // Lighting overrides
   brightness: number;
@@ -106,6 +122,10 @@ interface SceneState {
   setTextureRepeat: (repeat: { x: number; y: number }) => void;
   setTextureOffset: (offset: { x: number; y: number }) => void;
   setTextureRotation: (rotation: number) => void;
+  setSelectedFace: (face: string | null) => void;
+  setFaceTexture: (face: string, url: string) => void;
+  removeFaceTexture: (face: string) => void;
+  setFaceTextureTransform: (face: string, transform: Partial<Pick<FaceTextureConfig, 'repeat' | 'offset' | 'rotation'>>) => void;
   setBrightness: (b: number) => void;
   setLightAngle: (a: number) => void;
   setLightElevation: (e: number) => void;
@@ -121,6 +141,9 @@ interface SceneState {
   updateSurface: (id: string, updates: Partial<SurfacePlane>) => void;
   removeSurface: (id: string) => void;
   setSnapToSurface: (snap: boolean) => void;
+  setExportScale: (scale: number) => void;
+  setExportFilename: (filename: string) => void;
+  applyTemplate: (state: Partial<SceneState>) => void;
   reset: () => void;
 }
 
@@ -145,6 +168,8 @@ const initialState = {
   textureRepeat: { x: 1, y: 1 },
   textureOffset: { x: 0, y: 0 },
   textureRotation: 0,
+  faceTextures: {} as Record<string, FaceTextureConfig>,
+  selectedFace: null as string | null,
   brightness: 1.0,
   lightAngle: 45,
   lightElevation: 0.6,
@@ -156,6 +181,8 @@ const initialState = {
   sceneLights: [] as SceneLight[],
   surfaces: [] as SurfacePlane[],
   snapToSurface: true,
+  exportScale: 1,
+  exportFilename: 'depth-export',
 };
 
 export const useSceneStore = create<SceneState>((set) => ({
@@ -220,6 +247,41 @@ export const useSceneStore = create<SceneState>((set) => ({
   setTextureRepeat: (repeat) => set({ textureRepeat: repeat }),
   setTextureOffset: (offset) => set({ textureOffset: offset }),
   setTextureRotation: (rotation) => set({ textureRotation: rotation }),
+  setSelectedFace: (face) => set({ selectedFace: face }),
+  setFaceTexture: (face, url) =>
+    set((s) => ({
+      faceTextures: {
+        ...s.faceTextures,
+        [face]: {
+          url,
+          repeat: { x: 1, y: 1 },
+          offset: { x: 0, y: 0 },
+          rotation: 0,
+        },
+      },
+    })),
+  removeFaceTexture: (face) =>
+    set((s) => {
+      const next = { ...s.faceTextures };
+      delete next[face];
+      return { faceTextures: next };
+    }),
+  setFaceTextureTransform: (face, transform) =>
+    set((s) => {
+      const existing = s.faceTextures[face];
+      if (!existing) return {};
+      return {
+        faceTextures: {
+          ...s.faceTextures,
+          [face]: {
+            ...existing,
+            ...(transform.repeat !== undefined ? { repeat: transform.repeat } : {}),
+            ...(transform.offset !== undefined ? { offset: transform.offset } : {}),
+            ...(transform.rotation !== undefined ? { rotation: transform.rotation } : {}),
+          },
+        },
+      };
+    }),
   setBrightness: (b) => set({ brightness: b }),
   setLightAngle: (a) => set({ lightAngle: a }),
   setLightElevation: (e) => set({ lightElevation: e }),
@@ -241,5 +303,8 @@ export const useSceneStore = create<SceneState>((set) => ({
     })),
   removeSurface: (id) => set((s) => ({ surfaces: s.surfaces.filter((p) => p.id !== id) })),
   setSnapToSurface: (snap) => set({ snapToSurface: snap }),
+  setExportScale: (scale) => set({ exportScale: scale }),
+  setExportFilename: (filename) => set({ exportFilename: filename }),
+  applyTemplate: (templateState) => set(templateState),
   reset: () => set(initialState),
 }));

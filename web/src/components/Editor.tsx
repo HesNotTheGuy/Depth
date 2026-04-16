@@ -1,4 +1,4 @@
-import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles } from 'lucide-react';
+import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image } from 'lucide-react';
 import { useUIStore } from '../store/useUIStore';
 import { useSceneStore } from '../store/useSceneStore';
 import { CompositeViewport } from './viewport/CompositeViewport';
@@ -6,13 +6,17 @@ import { ObjectPanel } from './panels/ObjectPanel';
 import { LightingPanel } from './panels/LightingPanel';
 import { MaterialPanel } from './panels/MaterialPanel';
 import { SurfacesPanel } from './panels/SurfacesPanel';
+import { TemplatePanel } from './panels/TemplatePanel';
+import { ExportPanel } from './panels/ExportPanel';
 import type { SidebarTab } from '../store/useUIStore';
 
 const tabs: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
+  { id: 'templates', label: 'Templates', icon: <LayoutGrid size={14} /> },
   { id: 'object', label: 'Object', icon: <Box size={14} /> },
   { id: 'surfaces', label: 'Surfaces', icon: <Layers size={14} /> },
   { id: 'lighting', label: 'Light', icon: <Sun size={14} /> },
   { id: 'material', label: 'Material', icon: <Palette size={14} /> },
+  { id: 'export', label: 'Export', icon: <Image size={14} /> },
 ];
 
 export function Editor() {
@@ -47,7 +51,7 @@ export function Editor() {
         </div>
 
         <button
-          onClick={() => setShowExportModal(true)}
+          onClick={() => setSidebarTab('export')}
           className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-hover hover:brightness-110 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-lg shadow-primary/15"
         >
           <Download size={13} />
@@ -89,10 +93,12 @@ export function Editor() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {sidebarTab === 'templates' && <TemplatePanel />}
             {sidebarTab === 'object' && <ObjectPanel />}
             {sidebarTab === 'surfaces' && <SurfacesPanel />}
             {sidebarTab === 'lighting' && <LightingPanel />}
             {sidebarTab === 'material' && <MaterialPanel />}
+            {sidebarTab === 'export' && <ExportPanel />}
           </div>
         </div>
       </div>

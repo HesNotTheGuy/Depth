@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Point2D } from './useSceneStore';
 
 export type AppStep = 'upload' | 'editor';
-export type SidebarTab = 'object' | 'lighting' | 'material' | 'surfaces';
+export type SidebarTab = 'templates' | 'object' | 'lighting' | 'material' | 'surfaces' | 'export';
 
 interface UIState {
   step: AppStep;

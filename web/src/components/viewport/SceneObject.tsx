@@ -3,10 +3,99 @@ import { useThree, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { useSceneStore } from '../../store/useSceneStore';
+import { useSceneStore, type FaceTextureConfig } from '../../store/useSceneStore';
 import { findSurfaceBelow } from '../../utils/surfaceUtils';
 
 // Material configs are now driven by store values
+
+/**
+ * Map a BoxGeometry faceIndex (triangle index) to a named face.
+ * BoxGeometry generates 6 faces of 2 triangles each, in order:
+ * group 0: +X (right), group 1: -X (left), group 2: +Y (top),
+ * group 3: -Y (bottom), group 4: +Z (front), group 5: -Z (back)
+ */
+const BOX_FACE_NAMES = ['right', 'left', 'top', 'bottom', 'front', 'back'] as const;
+
+function faceIndexToBoxFace(faceIndex: number): string {
+  const groupIndex = Math.floor(faceIndex / 2);
+  return BOX_FACE_NAMES[groupIndex] ?? 'front';
+}
+
+/** For cylindrical shapes, determine body vs cap from faceIndex and geometry */
+function faceIndexToCylindricalPart(faceIndex: number, geometry: THREE.BufferGeometry): string {
+  // CylinderGeometry: side triangles come first, then top cap, then bottom cap
+  const groups = geometry.groups;
+  if (groups.length > 0) {
+    for (const group of groups) {
+      const startTri = group.start / 3;
+      const endTri = startTri + group.count / 3;
+      if (faceIndex >= startTri && faceIndex < endTri) {
+        return `group_${group.materialIndex}`;
+      }
+    }
+  }
+  // Fallback for standard CylinderGeometry: segments * 2 side triangles, then caps
+  // radialSegments defaults to 32 => 64 side triangles
+  const index = geometry.index;
+  const totalTriangles = index ? index.count / 3 : 0;
+  // Heuristic: caps are last ~32 triangles each for 32 segments
+  if (totalTriangles > 0 && faceIndex >= totalTriangles - 64) {
+    return faceIndex >= totalTriangles - 32 ? 'bottom' : 'top';
+  }
+  return 'body';
+}
+
+/** Determine which face was clicked based on object type and intersection */
+function detectFace(
+  objectType: string,
+  faceIndex: number,
+  geometry: THREE.BufferGeometry,
+): string {
+  switch (objectType) {
+    case 'box':
+    case 'card':
+      return faceIndexToBoxFace(faceIndex);
+    case 'phone':
+      // Phone is an ExtrudeGeometry — use faceIndex heuristic:
+      // front face (extruded face), back face, and sides
+      // For simplicity, map large groups to front/back/sides
+      return faceIndex < 2 ? 'front' : faceIndex < 4 ? 'back' : 'sides';
+    case 'mug':
+    case 'bottle':
+    case 'cylinder':
+      return faceIndexToCylindricalPart(faceIndex, geometry);
+    default:
+      return 'all';
+  }
+}
+
+/**
+ * For box-based geometries, ensure they have 6 material groups
+ * (one per face pair of triangles) so we can assign per-face materials.
+ */
+function ensureBoxGroups(geometry: THREE.BufferGeometry): void {
+  if (geometry.groups.length === 6) return; // already set up
+  geometry.clearGroups();
+  for (let i = 0; i < 6; i++) {
+    geometry.addGroup(i * 6, 6, i);
+  }
+}
+
+/** Load a texture from a data URL and configure it */
+function loadTextureFromUrl(url: string, config: FaceTextureConfig): Promise<THREE.Texture> {
+  return new Promise((resolve) => {
+    const loader = new THREE.TextureLoader();
+    loader.load(url, (tex) => {
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.repeat.set(config.repeat.x, config.repeat.y);
+      tex.offset.set(config.offset.x, config.offset.y);
+      tex.rotation = config.rotation;
+      resolve(tex);
+    });
+  });
+}
 
 function useObjModel(url: string | null) {
   const [geometry, setGeometry] = useState<THREE.BufferGeometry | null>(null);
@@ -80,6 +169,9 @@ export function SceneObject() {
   const textureRepeat = useSceneStore((s) => s.textureRepeat);
   const textureOffset = useSceneStore((s) => s.textureOffset);
   const textureRotation = useSceneStore((s) => s.textureRotation);
+  const faceTextures = useSceneStore((s) => s.faceTextures);
+  const selectedFace = useSceneStore((s) => s.selectedFace);
+  const setSelectedFace = useSceneStore((s) => s.setSelectedFace);
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
@@ -116,10 +208,52 @@ export function SceneObject() {
     invalidate();
   }, [loadedTexture, textureRepeat, textureOffset, textureRotation, invalidate]);
 
+  // Load per-face textures
+  const [loadedFaceTextures, setLoadedFaceTextures] = useState<Record<string, THREE.Texture>>({});
+
+  useEffect(() => {
+    const entries = Object.entries(faceTextures);
+    if (entries.length === 0) {
+      setLoadedFaceTextures({});
+      return;
+    }
+    let cancelled = false;
+    const loadAll = async () => {
+      const result: Record<string, THREE.Texture> = {};
+      for (const [face, config] of entries) {
+        const tex = await loadTextureFromUrl(config.url, config);
+        if (cancelled) return;
+        result[face] = tex;
+      }
+      if (!cancelled) {
+        setLoadedFaceTextures(result);
+        invalidate();
+      }
+    };
+    loadAll();
+    return () => { cancelled = true; };
+  }, [faceTextures, invalidate]);
+
+  // Update face texture transforms when they change
+  useEffect(() => {
+    for (const [face, config] of Object.entries(faceTextures)) {
+      const tex = loadedFaceTextures[face];
+      if (!tex) continue;
+      tex.repeat.set(config.repeat.x, config.repeat.y);
+      tex.offset.set(config.offset.x, config.offset.y);
+      tex.rotation = config.rotation;
+      tex.needsUpdate = true;
+    }
+    invalidate();
+  }, [faceTextures, loadedFaceTextures, invalidate]);
+
+  // Track pointer movement to distinguish click from drag
+  const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
+
   // Invalidate on any prop change so demand-mode canvas re-renders
   useEffect(() => {
     invalidate();
-  }, [objectType, customModelUrl, position, rotation, scale, color, material, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity, loadedTexture, invalidate]);
+  }, [objectType, customModelUrl, position, rotation, scale, color, material, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity, loadedTexture, loadedFaceTextures, selectedFace, invalidate]);
 
   // Snap to surface when position/surfaces change
   useEffect(() => {
@@ -277,6 +411,7 @@ export function SceneObject() {
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragging.current = true;
     dragStart.current = { x: e.clientX, y: e.clientY, pos: { ...position } };
+    pointerDownPos.current = { x: e.clientX, y: e.clientY };
   }, [position]);
 
   const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -299,14 +434,90 @@ export function SceneObject() {
     });
   }, [camera, size, position, setObjectPosition]);
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
     dragging.current = false;
-  }, []);
+
+    // Detect click (not drag) for face selection
+    if (pointerDownPos.current && geometry) {
+      const dx = e.clientX - pointerDownPos.current.x;
+      const dy = e.clientY - pointerDownPos.current.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < 5 && e.faceIndex !== undefined) {
+        const faceName = detectFace(objectType, e.faceIndex, geometry);
+        setSelectedFace(faceName === selectedFace ? null : faceName);
+      }
+    }
+    pointerDownPos.current = null;
+  }, [objectType, geometry, selectedFace, setSelectedFace]);
+
+  // Determine if we should use multi-material (box/card with face textures)
+  const isBoxType = objectType === 'box' || objectType === 'card';
+  const hasFaceTextures = Object.keys(loadedFaceTextures).length > 0;
+  const useMultiMaterial = isBoxType && hasFaceTextures;
+
+  // Ensure box geometry has groups for multi-material
+  useEffect(() => {
+    if (useMultiMaterial && geometry) {
+      ensureBoxGroups(geometry);
+      invalidate();
+    }
+  }, [useMultiMaterial, geometry, invalidate]);
+
+  // Build material array for box multi-material rendering
+  const materials = useMemo(() => {
+    if (!useMultiMaterial) return null;
+
+    const MaterialClass = needsPhysical ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
+    return BOX_FACE_NAMES.map((faceName) => {
+      const props: Record<string, unknown> = { ...matProps };
+      const faceTex = loadedFaceTextures[faceName];
+      if (faceTex) {
+        props.map = faceTex;
+      }
+      // Highlight selected face
+      if (faceName === selectedFace) {
+        props.emissive = new THREE.Color(0x3b82f6);
+        props.emissiveIntensity = 0.25;
+      }
+      return new MaterialClass(props);
+    });
+  }, [useMultiMaterial, needsPhysical, matProps, loadedFaceTextures, selectedFace]);
+
+  // Build single material with optional face highlight (for non-box types)
+  const singleMaterial = useMemo(() => {
+    if (useMultiMaterial) return null;
+    const props: Record<string, unknown> = { ...matProps };
+    if (selectedFace) {
+      props.emissive = new THREE.Color(0x3b82f6);
+      props.emissiveIntensity = 0.15;
+    }
+    return props;
+  }, [useMultiMaterial, matProps, selectedFace]);
+
+  // Clean up materials on unmount or change
+  useEffect(() => {
+    return () => {
+      materials?.forEach((m) => m.dispose());
+    };
+  }, [materials]);
+
+  // Ref to imperatively assign material array
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  // Apply multi-material array imperatively (R3F doesn't support material arrays declaratively)
+  useEffect(() => {
+    if (!meshRef.current) return;
+    if (useMultiMaterial && materials) {
+      meshRef.current.material = materials;
+    }
+    invalidate();
+  }, [useMultiMaterial, materials, invalidate]);
 
   if (!geometry) return null;
 
   return (
     <mesh
+      ref={meshRef}
       position={[position.x, position.y, position.z]}
       rotation={[rotation.x, rotation.y, rotation.z]}
       scale={scale}
@@ -315,14 +526,14 @@ export function SceneObject() {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerLeave={onPointerUp}
+      onPointerLeave={() => { dragging.current = false; }}
     >
       <primitive object={geometry} attach="geometry" />
-      {needsPhysical ? (
-        <meshPhysicalMaterial {...matProps} />
+      {!useMultiMaterial && (needsPhysical ? (
+        <meshPhysicalMaterial {...singleMaterial} />
       ) : (
-        <meshStandardMaterial {...matProps} />
-      )}
+        <meshStandardMaterial {...singleMaterial} />
+      ))}
     </mesh>
   );
 }
