@@ -116,18 +116,37 @@ export function CompositeViewport() {
   }, [backgroundImage]);
 
   // Wheel: Ctrl/Meta+Scroll = canvas zoom, Alt+Scroll = canvas zoom, plain Scroll = object scale
+  // Zoom is anchored to the mouse position so the user can zoom toward a target area.
   const handleWheel = useCallback((e: React.WheelEvent) => {
     if (e.ctrlKey || e.metaKey || e.altKey) {
-      // Canvas zoom (Adobe-style)
       e.preventDefault();
+      if (!containerRef.current) return;
+
       const zoomFactor = e.deltaY > 0 ? 0.9 : 1.1;
-      setCanvasZoom(canvasZoom * zoomFactor);
+      const newZoom = Math.max(0.1, Math.min(5, canvasZoom * zoomFactor));
+      const actualFactor = newZoom / canvasZoom;
+      if (actualFactor === 1) return;
+
+      // Mouse position relative to container center
+      const rect = containerRef.current.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const mx = e.clientX - cx;
+      const my = e.clientY - cy;
+
+      // Keep the point under the mouse fixed while zooming.
+      // New pan = (mouse - center) * (1 - r) + oldPan * r
+      const newPanX = mx * (1 - actualFactor) + canvasPan.x * actualFactor;
+      const newPanY = my * (1 - actualFactor) + canvasPan.y * actualFactor;
+
+      setCanvasZoom(newZoom);
+      setCanvasPan({ x: newPanX, y: newPanY });
     } else {
-      // Object scale
+      // Plain scroll = object scale
       const delta = e.deltaY > 0 ? -0.05 : 0.05;
       setScale(Math.max(0.1, Math.min(5, scale + delta)));
     }
-  }, [scale, setScale, canvasZoom, setCanvasZoom]);
+  }, [scale, setScale, canvasZoom, canvasPan, setCanvasZoom, setCanvasPan]);
 
   // Middle mouse drag on empty space = pan canvas
   const handleContainerPointerDown = useCallback((e: React.PointerEvent) => {
