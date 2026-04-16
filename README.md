@@ -2,7 +2,7 @@
 
 **Drop in a photo. Place a 3D object. The lighting just matches.**
 
-Most designers don't need to learn Blender. They need a phone mockup on a desk, a product shot with the right shadow, a mug with their logo on it. Depth lets you do that in seconds. Upload a photo, pick an object, drag it into place. The lighting and shadows match your scene automatically.
+Most designers don't need to learn Blender. They need a phone mockup on a desk, a product shot with the right shadow, a mug with their logo on it. Depth lets you do that in seconds. Upload a photo, pick an object, drag it into place. The lighting and shadows match your scene automatically. -- Work in progress!
 
 <p align="center">
   <img src="docs/screenshots/upload.png" alt="Upload Screen" width="720" />
