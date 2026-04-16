@@ -175,8 +175,10 @@ export function SceneObject() {
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
+  const setObjectRotation = useSceneStore((s) => s.setObjectRotation);
   const dragging = useRef(false);
-  const dragStart = useRef<{ x: number; y: number; pos: typeof position }>({ x: 0, y: 0, pos: position });
+  const dragButton = useRef(0); // 0 = left (move), 1 = middle (depth), 2 = right (rotate)
+  const dragStart = useRef<{ x: number; y: number; pos: typeof position; rot: typeof rotation }>({ x: 0, y: 0, pos: position, rot: rotation });
 
   const { geometry: customGeometry } = useObjModel(
     objectType === 'custom' ? customModelUrl : null
@@ -451,14 +453,16 @@ export function SceneObject() {
     return base;
   }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity, loadedTexture]);
 
-  // Drag to reposition object in screen-space XY
+  // Drag controls:
+  // Left drag = move XY, Right drag = rotate, Middle drag = move Z depth
   const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragging.current = true;
-    dragStart.current = { x: e.clientX, y: e.clientY, pos: { ...position } };
+    dragButton.current = e.button;
+    dragStart.current = { x: e.clientX, y: e.clientY, pos: { ...position }, rot: { ...rotation } };
     pointerDownPos.current = { x: e.clientX, y: e.clientY };
-  }, [position]);
+  }, [position, rotation]);
 
   const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (!dragging.current) return;
@@ -466,25 +470,46 @@ export function SceneObject() {
     const dx = e.clientX - dragStart.current.x;
     const dy = e.clientY - dragStart.current.y;
 
-    // Convert screen pixels to world units at the object's depth
-    const fov = (camera as THREE.PerspectiveCamera).fov;
-    const dist = camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
-    const vFov = (fov * Math.PI) / 180;
-    const worldPerPixelY = (2 * Math.tan(vFov / 2) * dist) / size.height;
-    const worldPerPixelX = worldPerPixelY;
+    if (dragButton.current === 2) {
+      // Right drag = rotate Y (horizontal) and X (vertical)
+      const sensitivity = 0.01;
+      setObjectRotation({
+        x: dragStart.current.rot.x + dy * sensitivity,
+        y: dragStart.current.rot.y + dx * sensitivity,
+        z: dragStart.current.rot.z,
+      });
+    } else if (dragButton.current === 1) {
+      // Middle drag = move Z depth (vertical mouse = push/pull)
+      const fov = (camera as THREE.PerspectiveCamera).fov;
+      const dist = camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
+      const vFov = (fov * Math.PI) / 180;
+      const worldPerPixel = (2 * Math.tan(vFov / 2) * dist) / size.height;
+      setObjectPosition({
+        x: dragStart.current.pos.x,
+        y: dragStart.current.pos.y,
+        z: dragStart.current.pos.z + dy * worldPerPixel,
+      });
+    } else {
+      // Left drag = move XY
+      const fov = (camera as THREE.PerspectiveCamera).fov;
+      const dist = camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
+      const vFov = (fov * Math.PI) / 180;
+      const worldPerPixelY = (2 * Math.tan(vFov / 2) * dist) / size.height;
+      const worldPerPixelX = worldPerPixelY;
 
-    setObjectPosition({
-      x: dragStart.current.pos.x + dx * worldPerPixelX,
-      y: dragStart.current.pos.y - dy * worldPerPixelY,
-      z: dragStart.current.pos.z,
-    });
-  }, [camera, size, position, setObjectPosition]);
+      setObjectPosition({
+        x: dragStart.current.pos.x + dx * worldPerPixelX,
+        y: dragStart.current.pos.y - dy * worldPerPixelY,
+        z: dragStart.current.pos.z,
+      });
+    }
+  }, [camera, size, position, setObjectPosition, setObjectRotation]);
 
   const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
     dragging.current = false;
 
-    // Detect click (not drag) for face selection
-    if (pointerDownPos.current && geometry) {
+    // Detect click (not drag) for face selection — left click only
+    if (dragButton.current === 0 && pointerDownPos.current && geometry) {
       const dx = e.clientX - pointerDownPos.current.x;
       const dy = e.clientY - pointerDownPos.current.y;
       const dist = Math.sqrt(dx * dx + dy * dy);

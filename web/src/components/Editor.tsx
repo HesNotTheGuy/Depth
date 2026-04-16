@@ -11,12 +11,12 @@ import { ExportPanel } from './panels/ExportPanel';
 import type { SidebarTab } from '../store/useUIStore';
 
 const tabs: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
-  { id: 'templates', label: 'Templates', icon: <LayoutGrid size={14} /> },
-  { id: 'object', label: 'Object', icon: <Box size={14} /> },
-  { id: 'surfaces', label: 'Surfaces', icon: <Layers size={14} /> },
-  { id: 'lighting', label: 'Light', icon: <Sun size={14} /> },
-  { id: 'material', label: 'Material', icon: <Palette size={14} /> },
-  { id: 'export', label: 'Export', icon: <Image size={14} /> },
+  { id: 'templates', label: 'Presets', icon: <LayoutGrid size={15} /> },
+  { id: 'object', label: 'Object', icon: <Box size={15} /> },
+  { id: 'surfaces', label: 'Surfaces', icon: <Layers size={15} /> },
+  { id: 'lighting', label: 'Light', icon: <Sun size={15} /> },
+  { id: 'material', label: 'Material', icon: <Palette size={15} /> },
+  { id: 'export', label: 'Export', icon: <Image size={15} /> },
 ];
 
 export function Editor() {
@@ -64,26 +64,29 @@ export function Editor() {
         <CompositeViewport />
 
         {/* Right sidebar */}
-        <div className="w-72 border-l border-panel-border bg-surface-raised flex flex-col shrink-0">
+        <div className="w-80 border-l border-panel-border bg-surface-raised flex flex-col shrink-0">
           {/* Tabs */}
-          <div className="flex border-b border-panel-border px-1 pt-1">
+          <div className="flex border-b border-panel-border px-2 pt-1.5 gap-1">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setSidebarTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-[11px] font-medium transition-all rounded-t-lg relative ${
+                className={`flex-1 flex flex-col items-center gap-0.5 py-1.5 text-[9px] font-medium transition-all rounded-t-lg relative ${
                   sidebarTab === tab.id
                     ? 'text-primary bg-white/[0.03]'
                     : 'text-text-muted hover:text-text-secondary'
                 }`}
+                title={tab.label}
               >
-                {tab.icon}
+                <span className="relative">
+                  {tab.icon}
+                  {tab.id === 'surfaces' && surfaceCount > 0 && (
+                    <span className="absolute -top-1 -right-2.5 w-3.5 h-3.5 bg-primary/20 text-primary text-[8px] rounded-full flex items-center justify-center font-bold">
+                      {surfaceCount}
+                    </span>
+                  )}
+                </span>
                 {tab.label}
-                {tab.id === 'surfaces' && surfaceCount > 0 && (
-                  <span className="w-4 h-4 bg-primary/20 text-primary text-[9px] rounded-full flex items-center justify-center font-bold">
-                    {surfaceCount}
-                  </span>
-                )}
                 {sidebarTab === tab.id && (
                   <div className="absolute bottom-0 left-2 right-2 h-[2px] bg-primary rounded-full" />
                 )}

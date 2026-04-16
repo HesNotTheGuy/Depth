@@ -97,7 +97,7 @@ export function CompositeViewport() {
   const isBlended = blendMode !== 'normal';
 
   return (
-    <div className="flex-1 relative bg-surface" onWheel={handleWheel}>
+    <div className="flex-1 relative bg-surface" onWheel={handleWheel} onContextMenu={(e) => e.preventDefault()}>
       {/* When a non-normal blend mode is active, render the background
            as an HTML image underneath so CSS mix-blend-mode can composite
            the 3D canvas over it. */}
@@ -145,7 +145,7 @@ export function CompositeViewport() {
       {/* Hint overlay */}
       <div className="absolute bottom-3 left-3 pointer-events-none">
         <div className="bg-black/60 backdrop-blur-md text-white/60 text-[10px] px-3 py-1.5 rounded-lg border border-white/5">
-          Drag object to move &middot; Scroll to scale &middot; Use sliders for precise control
+          Left drag to move &middot; Right drag to rotate &middot; Middle drag for depth &middot; Scroll to scale
         </div>
       </div>
     </div>
