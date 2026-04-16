@@ -16,6 +16,7 @@ const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'bottle', label: 'Bottle', icon: <Wine size={18} /> },
   { id: 'bag', label: 'Bag', icon: <ShoppingBag size={18} /> },
   { id: 'card', label: 'Card', icon: <CreditCard size={18} /> },
+  { id: 'donut', label: 'Donut', icon: <span className="text-base leading-none">🍩</span> },
 ];
 
 function Slider({

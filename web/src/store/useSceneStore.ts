@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { EstimatedLighting } from '../utils/lightingEstimator';
 
-export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'custom';
+export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'custom';
 
 export interface Vec3 {
   x: number;
@@ -220,7 +220,17 @@ export const useSceneStore = create<SceneState>((set) => ({
       set({ estimatedLighting: null });
     }
   },
-  setObjectType: (type) => set({ objectType: type }),
+  setObjectType: (type) => {
+    const update: Record<string, unknown> = { objectType: type };
+    // 🍩 Easter egg: auto-apply pink icing look
+    if (type === 'donut') {
+      update.objectColor = '#F472B6';
+      update.objectMaterial = 'glossy';
+      update.objectRoughness = 0.3;
+      update.objectMetalness = 0.0;
+    }
+    set(update);
+  },
   setCustomModelUrl: (url) => set({ customModelUrl: url }),
   setObjectPosition: (pos) => set({ objectPosition: pos }),
   setObjectRotation: (rot) => set({ objectRotation: rot }),

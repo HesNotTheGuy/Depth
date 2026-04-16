@@ -531,6 +531,111 @@ static std::vector<Triangle> generate_card() {
     return tris;
 }
 
+static std::vector<Triangle> generate_donut(int ring_segs = 24, int tube_segs = 16) {
+    std::vector<Triangle> tris;
+    float R = 0.35f, r = 0.15f;
+
+    // Donut body (torus laid flat — swapped Y and Z)
+    for (int i = 0; i < ring_segs; i++) {
+        float theta0 = 2.0f * static_cast<float>(M_PI) * i / ring_segs;
+        float theta1 = 2.0f * static_cast<float>(M_PI) * (i + 1) / ring_segs;
+        for (int j = 0; j < tube_segs; j++) {
+            float phi0 = 2.0f * static_cast<float>(M_PI) * j / tube_segs;
+            float phi1 = 2.0f * static_cast<float>(M_PI) * (j + 1) / tube_segs;
+
+            // Flat donut: X-Z plane, Y is up
+            auto pt = [&](float theta, float phi) -> Vec3 {
+                float ct = std::cos(theta), st = std::sin(theta);
+                float cp = std::cos(phi), sp = std::sin(phi);
+                return {(R + r*cp)*ct, r*sp, (R + r*cp)*st};
+            };
+            auto nm = [&](float theta, float phi) -> Vec3 {
+                float ct = std::cos(theta), st = std::sin(theta);
+                float cp = std::cos(phi), sp = std::sin(phi);
+                return normalize(Vec3{cp*ct, sp, cp*st});
+            };
+
+            Vec3 p00 = pt(theta0, phi0), p10 = pt(theta1, phi0);
+            Vec3 p01 = pt(theta0, phi1), p11 = pt(theta1, phi1);
+            Vec3 n00 = nm(theta0, phi0), n10 = nm(theta1, phi0);
+            Vec3 n01 = nm(theta0, phi1), n11 = nm(theta1, phi1);
+
+            float u0 = static_cast<float>(i) / ring_segs;
+            float u1 = static_cast<float>(i + 1) / ring_segs;
+            float v0 = static_cast<float>(j) / tube_segs;
+            float v1 = static_cast<float>(j + 1) / tube_segs;
+
+            tris.push_back({{{p00, n00, {u0,v0}}, {p10, n10, {u1,v0}}, {p11, n11, {u1,v1}}}});
+            tris.push_back({{{p00, n00, {u0,v0}}, {p11, n11, {u1,v1}}, {p01, n01, {u0,v1}}}});
+        }
+    }
+
+    // Icing — slightly larger torus, only upper half (Y >= 0)
+    float ir = r + 0.02f;
+    for (int i = 0; i < ring_segs; i++) {
+        float theta0 = 2.0f * static_cast<float>(M_PI) * i / ring_segs;
+        float theta1 = 2.0f * static_cast<float>(M_PI) * (i + 1) / ring_segs;
+        // Only upper half of tube: phi from 0 to PI
+        int half_segs = tube_segs / 2;
+        for (int j = 0; j < half_segs; j++) {
+            float phi0 = static_cast<float>(M_PI) * j / half_segs;
+            float phi1 = static_cast<float>(M_PI) * (j + 1) / half_segs;
+
+            auto pt = [&](float theta, float phi) -> Vec3 {
+                float ct = std::cos(theta), st = std::sin(theta);
+                float cp = std::cos(phi), sp = std::sin(phi);
+                return {(R + ir*cp)*ct, ir*sp, (R + ir*cp)*st};
+            };
+            auto nm = [&](float theta, float phi) -> Vec3 {
+                float ct = std::cos(theta), st = std::sin(theta);
+                float cp = std::cos(phi), sp = std::sin(phi);
+                return normalize(Vec3{cp*ct, sp, cp*st});
+            };
+
+            Vec3 p00 = pt(theta0, phi0), p10 = pt(theta1, phi0);
+            Vec3 p01 = pt(theta0, phi1), p11 = pt(theta1, phi1);
+            Vec3 n00 = nm(theta0, phi0), n10 = nm(theta1, phi0);
+            Vec3 n01 = nm(theta0, phi1), n11 = nm(theta1, phi1);
+
+            float u0 = static_cast<float>(i) / ring_segs;
+            float u1 = static_cast<float>(i + 1) / ring_segs;
+            float v0 = static_cast<float>(j) / half_segs;
+            float v1 = static_cast<float>(j + 1) / half_segs;
+
+            tris.push_back({{{p00, n00, {u0,v0}}, {p10, n10, {u1,v0}}, {p11, n11, {u1,v1}}}});
+            tris.push_back({{{p00, n00, {u0,v0}}, {p11, n11, {u1,v1}}, {p01, n01, {u0,v1}}}});
+        }
+    }
+
+    // Sprinkles — small cylinders on top of the donut
+    int sprinkle_count = 24;
+    // Simple deterministic "random" using golden ratio
+    float golden = 1.618033988f;
+    for (int s = 0; s < sprinkle_count; s++) {
+        float angle = 2.0f * static_cast<float>(M_PI) * s / sprinkle_count;
+        float radial_jitter = (std::fmod(s * golden, 1.0f) - 0.5f) * r * 1.2f;
+        float radial = R + radial_jitter;
+        float cx = std::cos(angle) * radial;
+        float cz = std::sin(angle) * radial;
+        float cy = r * 0.7f + std::fmod(s * golden * 0.3f, 0.03f);
+
+        float sr = 0.008f, sh = 0.02f; // sprinkle radius and half-height
+        // Tilted sprinkle: approximate as 2 triangles (tiny quad)
+        float tilt = std::fmod(s * golden * 2.0f, static_cast<float>(M_PI));
+        float dx = std::cos(tilt) * sh;
+        float dz = std::sin(tilt) * sh;
+        Vec3 pa = {cx - dx, cy + sr, cz - dz};
+        Vec3 pb = {cx + dx, cy + sr, cz + dz};
+        Vec3 pc = {cx + dx, cy - sr, cz + dz};
+        Vec3 pd = {cx - dx, cy - sr, cz - dz};
+        Vec3 sn = {0, 1, 0};
+        tris.push_back({{{pa, sn, {0,0}}, {pb, sn, {1,0}}, {pc, sn, {1,1}}}});
+        tris.push_back({{{pa, sn, {0,0}}, {pc, sn, {1,1}}, {pd, sn, {0,1}}}});
+    }
+
+    return tris;
+}
+
 static std::vector<Triangle> generate_mesh(GeometryType type) {
     switch (type) {
         case GeometryType::Box:      return generate_box();
@@ -543,6 +648,7 @@ static std::vector<Triangle> generate_mesh(GeometryType type) {
         case GeometryType::Bottle:   return generate_bottle();
         case GeometryType::Bag:      return generate_bag();
         case GeometryType::Card:     return generate_card();
+        case GeometryType::Donut:    return generate_donut();
         case GeometryType::Plane: {
             // Plane UVs: u = x+0.5, v = z+0.5 (maps unit plane to 0-1)
             Vec3 n = {0, 1, 0};

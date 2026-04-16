@@ -356,6 +356,52 @@ export function SceneObject() {
         return new THREE.BoxGeometry(0.875, 0.5, 0.01);
       }
 
+      case 'donut': {
+        // 🍩 The classic Blender donut — an easter egg for 3D beginners
+        const R = 0.35, r = 0.15; // torus major/minor radius
+
+        // Donut body
+        const body = new THREE.TorusGeometry(R, r, 16, 32);
+        body.rotateX(Math.PI / 2); // lay flat
+
+        // Icing — slightly larger half-torus on top
+        const icingR = r + 0.02;
+        const icing = new THREE.TorusGeometry(R, icingR, 16, 32, Math.PI * 2);
+        // Keep only upper half by clipping: scale Y of vertices below center to 0
+        const icingPos = icing.attributes.position;
+        for (let i = 0; i < icingPos.count; i++) {
+          const y = icingPos.getY(i);
+          if (y < -0.01) {
+            icingPos.setY(i, -0.01);
+          }
+        }
+        icingPos.needsUpdate = true;
+        icing.computeVertexNormals();
+        icing.rotateX(Math.PI / 2);
+
+        // Sprinkles — small capsule-like cylinders scattered on top
+        const sprinkles: THREE.BufferGeometry[] = [];
+        const sprinkleCount = 24;
+        for (let i = 0; i < sprinkleCount; i++) {
+          const angle = (i / sprinkleCount) * Math.PI * 2 + Math.random() * 0.3;
+          const radialOffset = R + (Math.random() - 0.5) * r * 1.2;
+          const sprinkle = new THREE.CylinderGeometry(0.008, 0.008, 0.04, 4);
+          // Random tilt
+          sprinkle.rotateZ(Math.random() * Math.PI);
+          sprinkle.rotateX(Math.random() * 0.5);
+          // Position on top of the donut
+          const x = Math.cos(angle) * radialOffset;
+          const z = Math.sin(angle) * radialOffset;
+          const y = r * 0.7 + Math.random() * 0.03;
+          sprinkle.translate(x, y, z);
+          sprinkles.push(sprinkle);
+        }
+
+        const parts = [body, icing, ...sprinkles];
+        const merged = mergeGeometries(parts, false);
+        return merged ?? body;
+      }
+
       default: return null;
     }
   }, [objectType]);
@@ -550,6 +596,7 @@ function getObjectHalfHeight(type: string, scale: number): number {
     case 'bottle': return 0.525 * scale;
     case 'bag': return 0.5 * scale;
     case 'card': return 0.25 * scale;
+    case 'donut': return 0.15 * scale;
     case 'custom': return 0.5 * scale;
     default: return 0.5 * scale;
   }
