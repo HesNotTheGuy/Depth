@@ -23,7 +23,6 @@ export function Editor() {
   const setStep = useUIStore((s) => s.setStep);
   const sidebarTab = useUIStore((s) => s.sidebarTab);
   const setSidebarTab = useUIStore((s) => s.setSidebarTab);
-  const setShowExportModal = useUIStore((s) => s.setShowExportModal);
   const reset = useSceneStore((s) => s.reset);
   const surfaceCount = useSceneStore((s) => s.surfaces.length);
 

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Download, Layers, Image, Check, Loader } from 'lucide-react';
+import { Layers, Image, Check, Loader } from 'lucide-react';
 import { useSceneStore } from '../../store/useSceneStore';
 import { useExportStore } from '../../store/useExportStore';
 import { captureComposite, captureLayered } from '../../utils/exportUtils';

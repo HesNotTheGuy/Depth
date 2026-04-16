@@ -442,8 +442,8 @@ export function SceneObject() {
       const dx = e.clientX - pointerDownPos.current.x;
       const dy = e.clientY - pointerDownPos.current.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 5 && e.faceIndex !== undefined) {
-        const faceName = detectFace(objectType, e.faceIndex, geometry);
+      if (dist < 5 && e.faceIndex != null) {
+        const faceName = detectFace(objectType, e.faceIndex as number, geometry);
         setSelectedFace(faceName === selectedFace ? null : faceName);
       }
     }
