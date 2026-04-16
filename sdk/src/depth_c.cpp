@@ -117,6 +117,15 @@ void depth_object_set_material(
     obj->material.roughness = roughness;
 }
 
+void depth_object_set_metalness(
+    DepthScene* scene, uint32_t id, float metalness
+) {
+    if (!scene) return;
+    auto* obj = scene->scene.object(id);
+    if (!obj) return;
+    obj->material.metalness = metalness;
+}
+
 void depth_scene_remove_object(DepthScene* scene, uint32_t id) {
     if (scene) scene->scene.remove_object(id);
 }
@@ -138,6 +147,35 @@ void depth_scene_snap_objects(DepthScene* scene) {
 
 void depth_scene_remove_surface(DepthScene* scene, uint32_t id) {
     if (scene) scene->scene.remove_surface(id);
+}
+
+/* ── Shadow controls ─────────────────────────────────── */
+
+void depth_set_shadow_opacity(DepthScene* scene, float opacity) {
+    if (scene) scene->scene.set_shadow_opacity(opacity);
+}
+
+void depth_set_shadow_softness(DepthScene* scene, float softness) {
+    if (scene) scene->scene.set_shadow_softness(softness);
+}
+
+void depth_set_shadow_color(DepthScene* scene, float r, float g, float b) {
+    if (scene) scene->scene.set_shadow_color({r, g, b, 1.0f});
+}
+
+/* ── Point lights ────────────────────────────────────── */
+
+uint32_t depth_add_point_light(
+    DepthScene* scene,
+    float x, float y, float z,
+    float r, float g, float b, float intensity
+) {
+    if (!scene) return 0;
+    PointLight pl;
+    pl.position = {x, y, z};
+    pl.color = {r, g, b, 1.0f};
+    pl.intensity = intensity;
+    return scene->scene.add_point_light(std::move(pl));
 }
 
 /* ── Rendering ─────────────────────────────────────── */

@@ -33,6 +33,14 @@ struct Material {
     float clearcoat = 0.0f;
     float ior = 1.5f;           // index of refraction
 
+    float opacity = 1.0f;        // overall opacity (modulates final alpha)
+    float reflectivity = 0.5f;   // F0 for dielectrics (replaces hardcoded 0.04)
+
+    // Texture transform
+    Vec2 texture_repeat = {1.0f, 1.0f};
+    Vec2 texture_offset = {0.0f, 0.0f};
+    float texture_rotation = 0.0f;
+
     /// Optional texture map (albedo). Null = use base_color.
     std::shared_ptr<Image> texture;
 

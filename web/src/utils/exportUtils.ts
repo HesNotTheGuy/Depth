@@ -1,5 +1,19 @@
 import * as THREE from 'three';
 import { downloadBlob } from './exportHelpers';
+import type { ExportFormat } from '../store/useSceneStore';
+
+/** Map export format to MIME type */
+function formatToMime(format: ExportFormat): string {
+  switch (format) {
+    case 'jpeg': return 'image/jpeg';
+    case 'webp': return 'image/webp';
+    default: return 'image/png';
+  }
+}
+
+/** JPEG quality (0-1). Only used for lossy formats. */
+const JPEG_QUALITY = 0.92;
+const WEBP_QUALITY = 0.90;
 
 /**
  * Render the Three.js scene to a PNG blob at the given resolution.
@@ -10,7 +24,8 @@ export async function captureCanvas(
   scene: THREE.Scene,
   camera: THREE.Camera,
   width: number,
-  height: number
+  height: number,
+  format: ExportFormat = 'png'
 ): Promise<Blob> {
   // Save original state
   const originalSize = renderer.getSize(new THREE.Vector2());
@@ -30,10 +45,13 @@ export async function captureCanvas(
   renderer.render(scene, camera);
 
   // Grab the pixels
+  const mime = formatToMime(format);
+  const quality = format === 'jpeg' ? JPEG_QUALITY : format === 'webp' ? WEBP_QUALITY : undefined;
   const blob = await new Promise<Blob>((resolve, reject) => {
     renderer.domElement.toBlob(
       (b) => (b ? resolve(b) : reject(new Error('Failed to create blob'))),
-      'image/png'
+      mime,
+      quality
     );
   });
 
@@ -60,15 +78,16 @@ export async function captureComposite(
   scene: THREE.Scene,
   camera: THREE.Camera,
   scale: number,
-  filename: string
+  filename: string,
+  format: ExportFormat = 'png'
 ): Promise<void> {
   const baseW = renderer.domElement.clientWidth;
   const baseH = renderer.domElement.clientHeight;
   const w = Math.round(baseW * scale);
   const h = Math.round(baseH * scale);
 
-  const blob = await captureCanvas(renderer, scene, camera, w, h);
-  downloadBlob(blob, `${filename}.png`);
+  const blob = await captureCanvas(renderer, scene, camera, w, h, format);
+  downloadBlob(blob, `${filename}.${format === 'jpeg' ? 'jpg' : format}`);
 }
 
 /** Visibility state snapshot for scene objects */
@@ -149,12 +168,14 @@ export async function captureLayered(
   scene: THREE.Scene,
   camera: THREE.Camera,
   scale: number,
-  filename: string
+  filename: string,
+  format: ExportFormat = 'png'
 ): Promise<void> {
   const baseW = renderer.domElement.clientWidth;
   const baseH = renderer.domElement.clientHeight;
   const w = Math.round(baseW * scale);
   const h = Math.round(baseH * scale);
+  const ext = format === 'jpeg' ? 'jpg' : format;
 
   const snapshot = saveVisibility(scene);
 
@@ -163,7 +184,7 @@ export async function captureLayered(
     if (isBackgroundPlane(obj)) obj.visible = false;
     if (isContactShadow(obj)) obj.visible = false;
   });
-  const objectBlob = await captureCanvas(renderer, scene, camera, w, h);
+  const objectBlob = await captureCanvas(renderer, scene, camera, w, h, format);
   restoreVisibility(snapshot);
 
   // 2. Shadow-only layer: hide all scene objects, keep background off, keep shadows
@@ -171,18 +192,18 @@ export async function captureLayered(
     if (isBackgroundPlane(obj)) obj.visible = false;
     if (isSceneObject(obj)) obj.visible = false;
   });
-  const shadowBlob = await captureCanvas(renderer, scene, camera, w, h);
+  const shadowBlob = await captureCanvas(renderer, scene, camera, w, h, format);
   restoreVisibility(snapshot);
 
   // 3. Full composite — already visible
-  const compositeBlob = await captureCanvas(renderer, scene, camera, w, h);
+  const compositeBlob = await captureCanvas(renderer, scene, camera, w, h, format);
   restoreVisibility(snapshot);
 
   // Re-render to restore viewport
   renderer.render(scene, camera);
 
   // Download all three
-  downloadBlob(objectBlob, `${filename}-object.png`);
-  downloadBlob(shadowBlob, `${filename}-shadow.png`);
-  downloadBlob(compositeBlob, `${filename}-composite.png`);
+  downloadBlob(objectBlob, `${filename}-object.${ext}`);
+  downloadBlob(shadowBlob, `${filename}-shadow.${ext}`);
+  downloadBlob(compositeBlob, `${filename}-composite.${ext}`);
 }

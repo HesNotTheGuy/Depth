@@ -48,6 +48,13 @@ typedef enum {
     DEPTH_GEOMETRY_CONE,
     DEPTH_GEOMETRY_TORUS,
     DEPTH_GEOMETRY_PLANE,
+    DEPTH_GEOMETRY_CUSTOM,
+    DEPTH_GEOMETRY_MUG,
+    DEPTH_GEOMETRY_PHONE,
+    DEPTH_GEOMETRY_BOTTLE,
+    DEPTH_GEOMETRY_BAG,
+    DEPTH_GEOMETRY_CARD,
+    DEPTH_GEOMETRY_DONUT,
 } DepthGeometry;
 
 typedef enum {
@@ -116,6 +123,9 @@ DEPTH_API void depth_object_set_material(
     DepthScene* scene, uint32_t id,
     DepthMaterial preset, float r, float g, float b, float roughness);
 
+DEPTH_API void depth_object_set_metalness(
+    DepthScene* scene, uint32_t id, float metalness);
+
 DEPTH_API void depth_scene_remove_object(DepthScene* scene, uint32_t id);
 
 /* Surfaces */
@@ -126,6 +136,17 @@ DEPTH_API uint32_t depth_scene_add_surface(
 
 DEPTH_API void depth_scene_snap_objects(DepthScene* scene);
 DEPTH_API void depth_scene_remove_surface(DepthScene* scene, uint32_t id);
+
+/* Shadow controls */
+DEPTH_API void depth_set_shadow_opacity(DepthScene* scene, float opacity);
+DEPTH_API void depth_set_shadow_softness(DepthScene* scene, float softness);
+DEPTH_API void depth_set_shadow_color(DepthScene* scene, float r, float g, float b);
+
+/* Point lights */
+DEPTH_API uint32_t depth_add_point_light(
+    DepthScene* scene,
+    float x, float y, float z,
+    float r, float g, float b, float intensity);
 
 /* ── Rendering ─────────────────────────────────────────── */
 

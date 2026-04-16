@@ -13,7 +13,19 @@
 #include "depth/types.h"
 #include "depth/image.h"
 
+#include <vector>
+
 namespace depth {
+
+/**
+ * A bright spot detected in the image, likely a light source.
+ */
+struct DetectedLight {
+    float x = 0.0f;       ///< Normalized image X position [0, 1]
+    float y = 0.0f;       ///< Normalized image Y position [0, 1]
+    Color color = Color::white(); ///< Average color of the bright region
+    float intensity = 1.0f;       ///< Average luminance [0, 1]
+};
 
 /**
  * Estimated lighting parameters derived from image analysis.
@@ -37,6 +49,9 @@ struct LightingEstimate {
 
     /// Contrast/shadow hardness hint [0, 1]. 0 = flat, 1 = harsh shadows.
     float contrast = 0.5f;
+
+    /// Bright spots detected in the image (up to 4), sorted by intensity.
+    std::vector<DetectedLight> detected_lights;
 };
 
 /**

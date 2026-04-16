@@ -3,6 +3,9 @@ import type { EstimatedLighting } from '../utils/lightingEstimator';
 
 export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'custom';
 
+export type ExportFormat = 'png' | 'jpeg' | 'webp';
+export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
+
 export interface Vec3 {
   x: number;
   y: number;
@@ -90,6 +93,10 @@ interface SceneState {
   // Export settings
   exportScale: number;
   exportFilename: string;
+  exportFormat: ExportFormat;
+
+  // Blend mode
+  blendMode: BlendMode;
 
   // Lighting overrides
   brightness: number;
@@ -143,6 +150,8 @@ interface SceneState {
   setSnapToSurface: (snap: boolean) => void;
   setExportScale: (scale: number) => void;
   setExportFilename: (filename: string) => void;
+  setExportFormat: (format: ExportFormat) => void;
+  setBlendMode: (mode: BlendMode) => void;
   applyTemplate: (state: Partial<SceneState>) => void;
   reset: () => void;
 }
@@ -183,6 +192,8 @@ const initialState = {
   snapToSurface: true,
   exportScale: 1,
   exportFilename: 'depth-export',
+  exportFormat: 'png' as ExportFormat,
+  blendMode: 'normal' as BlendMode,
 };
 
 export const useSceneStore = create<SceneState>((set) => ({
@@ -315,6 +326,8 @@ export const useSceneStore = create<SceneState>((set) => ({
   setSnapToSurface: (snap) => set({ snapToSurface: snap }),
   setExportScale: (scale) => set({ exportScale: scale }),
   setExportFilename: (filename) => set({ exportFilename: filename }),
+  setExportFormat: (format) => set({ exportFormat: format }),
+  setBlendMode: (mode) => set({ blendMode: mode }),
   applyTemplate: (templateState) => set(templateState),
   reset: () => set(initialState),
 }));

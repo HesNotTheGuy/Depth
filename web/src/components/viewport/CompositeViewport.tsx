@@ -86,14 +86,29 @@ function ThreeRefCapture() {
 export function CompositeViewport() {
   const scale = useSceneStore((s) => s.objectScale);
   const setScale = useSceneStore((s) => s.setObjectScale);
+  const blendMode = useSceneStore((s) => s.blendMode);
+  const backgroundImage = useSceneStore((s) => s.backgroundImage);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const delta = e.deltaY > 0 ? -0.05 : 0.05;
     setScale(Math.max(0.1, Math.min(5, scale + delta)));
   }, [scale, setScale]);
 
+  const isBlended = blendMode !== 'normal';
+
   return (
     <div className="flex-1 relative bg-surface" onWheel={handleWheel}>
+      {/* When a non-normal blend mode is active, render the background
+           as an HTML image underneath so CSS mix-blend-mode can composite
+           the 3D canvas over it. */}
+      {isBlended && backgroundImage && (
+        <img
+          src={backgroundImage}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+        />
+      )}
+
       {/* 3D canvas layer — background image is rendered as a 3D plane
            inside the scene so glass refraction can distort it */}
       <Canvas
@@ -106,7 +121,11 @@ export function CompositeViewport() {
           powerPreference: 'high-performance',
         }}
         camera={{ position: [0, 0.5, 4], fov: 45, near: 0.1, far: 50 }}
-        style={{ position: 'absolute', inset: 0 }}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          mixBlendMode: isBlended ? blendMode : undefined,
+        }}
       >
         <ThreeRefCapture />
         <Suspense fallback={null}>

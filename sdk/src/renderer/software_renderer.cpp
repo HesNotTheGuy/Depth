@@ -705,7 +705,8 @@ static LightContrib shade_pbr(
     Vec3 light_col,  // light color * intensity
     Vec3 albedo,     // base color
     float metalness,
-    float roughness
+    float roughness,
+    float reflectivity = 0.04f  // F0 for dielectrics
 ) {
     Vec3 H = normalize(L + V);
     float ndotl = std::max(0.0f, dot(N, L));
@@ -714,10 +715,10 @@ static LightContrib shade_pbr(
     float hdotv = std::max(0.0f, dot(H, V));
 
     // F0: reflectance at normal incidence
-    // Dielectric: 0.04, Metal: albedo
-    Vec3 f0 = {0.04f + metalness * (albedo.x - 0.04f),
-               0.04f + metalness * (albedo.y - 0.04f),
-               0.04f + metalness * (albedo.z - 0.04f)};
+    // Dielectric: reflectivity param, Metal: albedo
+    Vec3 f0 = {reflectivity + metalness * (albedo.x - reflectivity),
+               reflectivity + metalness * (albedo.y - reflectivity),
+               reflectivity + metalness * (albedo.z - reflectivity)};
 
     float alpha = std::max(roughness * roughness, 0.001f);
 
@@ -897,7 +898,19 @@ public:
                             float tex_u = (w0 * sv[0].uv.x + w1 * sv[1].uv.x + w2 * sv[2].uv.x) * inv_sum;
                             float tex_v = (w0 * sv[0].uv.y + w1 * sv[1].uv.y + w2 * sv[2].uv.y) * inv_sum;
 
-                            // Repeat wrapping (handle negatives)
+                            // Apply texture transform: rotation around center
+                            if (mat.texture_rotation != 0.0f) {
+                                float c = std::cos(mat.texture_rotation);
+                                float s = std::sin(mat.texture_rotation);
+                                float cu = tex_u - 0.5f, cv = tex_v - 0.5f;
+                                tex_u = cu * c - cv * s + 0.5f;
+                                tex_v = cu * s + cv * c + 0.5f;
+                            }
+                            // Apply repeat and offset
+                            tex_u = tex_u * mat.texture_repeat.x + mat.texture_offset.x;
+                            tex_v = tex_v * mat.texture_repeat.y + mat.texture_offset.y;
+
+                            // Wrap to [0,1] (handle negatives)
                             tex_u = tex_u - std::floor(tex_u);
                             tex_v = tex_v - std::floor(tex_v);
 
@@ -922,7 +935,8 @@ public:
 
                         // Directional light (PBR)
                         auto dir_contrib = shade_pbr(N, V, dir_light_dir, dir_light_col,
-                                                     pixel_albedo, mat.metalness, mat.roughness);
+                                                     pixel_albedo, mat.metalness, mat.roughness,
+                                                     mat.reflectivity);
                         color.x += dir_contrib.color.x;
                         color.y += dir_contrib.color.y;
                         color.z += dir_contrib.color.z;
@@ -948,7 +962,8 @@ public:
                                            pl.color.b * pl.intensity * attenuation};
 
                             auto pl_contrib = shade_pbr(N, V, L, pl_col,
-                                                        pixel_albedo, mat.metalness, mat.roughness);
+                                                        pixel_albedo, mat.metalness, mat.roughness,
+                                                        mat.reflectivity);
                             color.x += pl_contrib.color.x;
                             color.y += pl_contrib.color.y;
                             color.z += pl_contrib.color.z;
@@ -1006,6 +1021,9 @@ public:
                         color.x = std::pow(color.x, 1.0f / 2.2f);
                         color.y = std::pow(color.y, 1.0f / 2.2f);
                         color.z = std::pow(color.z, 1.0f / 2.2f);
+
+                        // Apply material opacity
+                        alpha_out *= mat.opacity;
 
                         size_t off = idx * 4;
                         pixels[off + 0] = static_cast<uint8_t>(clampf(color.x * 255.0f, 0.0f, 255.0f));
