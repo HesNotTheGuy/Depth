@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Image, Upload, X, RotateCcw, MousePointerClick, Layers } from 'lucide-react';
 import { useSceneStore, type FaceTextureConfig } from '../../store/useSceneStore';
+import { useSelectedObject } from '../../hooks/useSelectedObject';
 import { SliderInput } from '../ui/SliderInput';
 
 type MatPreset = 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
@@ -25,13 +26,7 @@ const swatches = [
 ];
 
 function SliderRow({
-  label,
-  value,
-  onChange,
-  min = 0,
-  max = 1,
-  step = 0.01,
-  displayValue,
+  label, value, onChange, min = 0, max = 1, step = 0.01, displayValue,
 }: {
   label: string;
   value: number;
@@ -57,40 +52,30 @@ function SliderRow({
 }
 
 export function MaterialPanel() {
-  const material = useSceneStore((s) => s.objectMaterial);
-  const color = useSceneStore((s) => s.objectColor);
-  const roughness = useSceneStore((s) => s.objectRoughness);
-  const metalness = useSceneStore((s) => s.objectMetalness);
-  const transmission = useSceneStore((s) => s.objectTransmission);
-  const ior = useSceneStore((s) => s.objectIor);
-  const clearcoat = useSceneStore((s) => s.objectClearcoat);
-  const opacity = useSceneStore((s) => s.objectOpacity);
-  const reflectivity = useSceneStore((s) => s.objectReflectivity);
-  const setMaterial = useSceneStore((s) => s.setObjectMaterial);
-  const setColor = useSceneStore((s) => s.setObjectColor);
-  const setRoughness = useSceneStore((s) => s.setObjectRoughness);
-  const setMetalness = useSceneStore((s) => s.setObjectMetalness);
-  const setTransmission = useSceneStore((s) => s.setObjectTransmission);
-  const setIor = useSceneStore((s) => s.setObjectIor);
-  const setClearcoat = useSceneStore((s) => s.setObjectClearcoat);
-  const setOpacity = useSceneStore((s) => s.setObjectOpacity);
-  const setReflectivity = useSceneStore((s) => s.setObjectReflectivity);
-  const objectTexture = useSceneStore((s) => s.objectTexture);
-  const textureRepeat = useSceneStore((s) => s.textureRepeat);
-  const textureOffset = useSceneStore((s) => s.textureOffset);
-  const textureRotation = useSceneStore((s) => s.textureRotation);
-  const setObjectTexture = useSceneStore((s) => s.setObjectTexture);
-  const setTextureRepeat = useSceneStore((s) => s.setTextureRepeat);
-  const setTextureOffset = useSceneStore((s) => s.setTextureOffset);
-  const setTextureRotation = useSceneStore((s) => s.setTextureRotation);
+  const selected = useSelectedObject();
+  const updateSelected = useSceneStore((s) => s.updateSelected);
   const selectedFace = useSceneStore((s) => s.selectedFace);
-  const faceTextures = useSceneStore((s) => s.faceTextures);
   const setSelectedFace = useSceneStore((s) => s.setSelectedFace);
-  const setFaceTexture = useSceneStore((s) => s.setFaceTexture);
-  const removeFaceTexture = useSceneStore((s) => s.removeFaceTexture);
-  const setFaceTextureTransform = useSceneStore((s) => s.setFaceTextureTransform);
+  const setFaceTextureForSelected = useSceneStore((s) => s.setFaceTextureForSelected);
+  const removeFaceTextureForSelected = useSceneStore((s) => s.removeFaceTextureForSelected);
+  const setFaceTextureTransformForSelected = useSceneStore((s) => s.setFaceTextureTransformForSelected);
   const textureInputRef = useRef<HTMLInputElement>(null);
   const faceTextureInputRef = useRef<HTMLInputElement>(null);
+
+  if (!selected) {
+    return (
+      <div className="py-6">
+        <p className="text-[11px] text-text-muted text-center">
+          Select an object to edit its material.
+        </p>
+      </div>
+    );
+  }
+
+  const {
+    material, color, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity,
+    texture: objectTexture, textureRepeat, textureOffset, textureRotation, faceTextures,
+  } = selected;
 
   const activeFaceConfig: FaceTextureConfig | null =
     selectedFace ? faceTextures[selectedFace] ?? null : null;
@@ -100,7 +85,7 @@ export function MaterialPanel() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setObjectTexture(reader.result as string);
+      updateSelected({ texture: reader.result as string });
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -111,21 +96,23 @@ export function MaterialPanel() {
     if (!file || !selectedFace) return;
     const reader = new FileReader();
     reader.onload = () => {
-      setFaceTexture(selectedFace, reader.result as string);
+      setFaceTextureForSelected(selectedFace, reader.result as string);
     };
     reader.readAsDataURL(file);
     e.target.value = '';
   };
 
   const resetTextureTransform = () => {
-    setTextureRepeat({ x: 1, y: 1 });
-    setTextureOffset({ x: 0, y: 0 });
-    setTextureRotation(0);
+    updateSelected({
+      textureRepeat: { x: 1, y: 1 },
+      textureOffset: { x: 0, y: 0 },
+      textureRotation: 0,
+    });
   };
 
   const resetFaceTextureTransform = () => {
     if (!selectedFace) return;
-    setFaceTextureTransform(selectedFace, {
+    setFaceTextureTransformForSelected(selectedFace, {
       repeat: { x: 1, y: 1 },
       offset: { x: 0, y: 0 },
       rotation: 0,
@@ -141,14 +128,13 @@ export function MaterialPanel() {
         {presets.map((p) => (
           <button
             key={p.id}
-            onClick={() => setMaterial(p.id)}
+            onClick={() => updateSelected({ material: p.id })}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${
               material === p.id
                 ? 'bg-primary/10 ring-1 ring-primary/25'
                 : 'hover:bg-white/[0.03]'
             }`}
           >
-            {/* Material preview orb */}
             <div
               className={`w-7 h-7 rounded-full shrink-0 ${
                 p.id === 'glass' ? 'bg-white/10 border border-white/20' : ''
@@ -182,13 +168,13 @@ export function MaterialPanel() {
         <input
           type="color"
           value={color}
-          onChange={(e) => setColor(e.target.value)}
+          onChange={(e) => updateSelected({ color: e.target.value })}
           className="w-8 h-8 rounded-lg cursor-pointer"
         />
         <input
           type="text"
           value={color}
-          onChange={(e) => setColor(e.target.value)}
+          onChange={(e) => updateSelected({ color: e.target.value })}
           className="flex-1 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
         />
       </div>
@@ -197,7 +183,7 @@ export function MaterialPanel() {
         {swatches.map((s) => (
           <button
             key={s.color}
-            onClick={() => setColor(s.color)}
+            onClick={() => updateSelected({ color: s.color })}
             className={`w-7 h-7 rounded-lg transition-all hover:scale-110 ${
               color.toLowerCase() === s.color.toLowerCase()
                 ? 'ring-2 ring-primary ring-offset-1 ring-offset-surface-raised'
@@ -209,7 +195,6 @@ export function MaterialPanel() {
         ))}
       </div>
 
-      {/* Face Selection */}
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
         Face Placement
       </label>
@@ -229,7 +214,6 @@ export function MaterialPanel() {
             </button>
           </div>
 
-          {/* Per-face texture controls */}
           {activeFaceConfig ? (
             <div className="mb-3">
               <div className="flex items-center gap-2 mb-2.5">
@@ -250,7 +234,7 @@ export function MaterialPanel() {
                   <RotateCcw size={12} />
                 </button>
                 <button
-                  onClick={() => removeFaceTexture(selectedFace)}
+                  onClick={() => removeFaceTextureForSelected(selectedFace)}
                   className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-red-400 transition-colors"
                   title="Remove face texture"
                 >
@@ -258,11 +242,11 @@ export function MaterialPanel() {
                 </button>
               </div>
               <div className="space-y-2">
-                <SliderRow label="Repeat X" value={activeFaceConfig.repeat.x} onChange={(v) => setFaceTextureTransform(selectedFace, { repeat: { x: v, y: activeFaceConfig.repeat.y } })} min={0.1} max={10} step={0.1} displayValue={activeFaceConfig.repeat.x.toFixed(1)} />
-                <SliderRow label="Repeat Y" value={activeFaceConfig.repeat.y} onChange={(v) => setFaceTextureTransform(selectedFace, { repeat: { x: activeFaceConfig.repeat.x, y: v } })} min={0.1} max={10} step={0.1} displayValue={activeFaceConfig.repeat.y.toFixed(1)} />
-                <SliderRow label="Offset X" value={activeFaceConfig.offset.x} onChange={(v) => setFaceTextureTransform(selectedFace, { offset: { x: v, y: activeFaceConfig.offset.y } })} min={0} max={1} step={0.01} />
-                <SliderRow label="Offset Y" value={activeFaceConfig.offset.y} onChange={(v) => setFaceTextureTransform(selectedFace, { offset: { x: activeFaceConfig.offset.x, y: v } })} min={0} max={1} step={0.01} />
-                <SliderRow label="Rotation" value={activeFaceConfig.rotation} onChange={(v) => setFaceTextureTransform(selectedFace, { rotation: v })} min={0} max={6.283} step={0.01} displayValue={`${Math.round(activeFaceConfig.rotation * 180 / Math.PI)}°`} />
+                <SliderRow label="Repeat X" value={activeFaceConfig.repeat.x} onChange={(v) => setFaceTextureTransformForSelected(selectedFace, { repeat: { x: v, y: activeFaceConfig.repeat.y } })} min={0.1} max={10} step={0.1} displayValue={activeFaceConfig.repeat.x.toFixed(1)} />
+                <SliderRow label="Repeat Y" value={activeFaceConfig.repeat.y} onChange={(v) => setFaceTextureTransformForSelected(selectedFace, { repeat: { x: activeFaceConfig.repeat.x, y: v } })} min={0.1} max={10} step={0.1} displayValue={activeFaceConfig.repeat.y.toFixed(1)} />
+                <SliderRow label="Offset X" value={activeFaceConfig.offset.x} onChange={(v) => setFaceTextureTransformForSelected(selectedFace, { offset: { x: v, y: activeFaceConfig.offset.y } })} min={0} max={1} step={0.01} />
+                <SliderRow label="Offset Y" value={activeFaceConfig.offset.y} onChange={(v) => setFaceTextureTransformForSelected(selectedFace, { offset: { x: activeFaceConfig.offset.x, y: v } })} min={0} max={1} step={0.01} />
+                <SliderRow label="Rotation" value={activeFaceConfig.rotation} onChange={(v) => setFaceTextureTransformForSelected(selectedFace, { rotation: v })} min={0} max={6.283} step={0.01} displayValue={`${Math.round(activeFaceConfig.rotation * 180 / Math.PI)}°`} />
               </div>
             </div>
           ) : (
@@ -288,7 +272,6 @@ export function MaterialPanel() {
         </p>
       )}
 
-      {/* Face texture thumbnails */}
       {Object.keys(faceTextures).length > 0 && (
         <div className="mb-3">
           <span className="text-[10px] text-text-muted block mb-1.5">Applied face textures:</span>
@@ -314,7 +297,6 @@ export function MaterialPanel() {
         </div>
       )}
 
-      {/* Global Texture / Label */}
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
         Global Texture
       </label>
@@ -338,7 +320,7 @@ export function MaterialPanel() {
               <RotateCcw size={12} />
             </button>
             <button
-              onClick={() => setObjectTexture(null)}
+              onClick={() => updateSelected({ texture: null })}
               className="p-1 hover:bg-white/10 rounded text-text-muted hover:text-red-400 transition-colors"
               title="Remove texture"
             >
@@ -346,11 +328,11 @@ export function MaterialPanel() {
             </button>
           </div>
           <div className="space-y-2">
-            <SliderRow label="Repeat X" value={textureRepeat.x} onChange={(v) => setTextureRepeat({ ...textureRepeat, x: v })} min={0.1} max={10} step={0.1} displayValue={textureRepeat.x.toFixed(1)} />
-            <SliderRow label="Repeat Y" value={textureRepeat.y} onChange={(v) => setTextureRepeat({ ...textureRepeat, y: v })} min={0.1} max={10} step={0.1} displayValue={textureRepeat.y.toFixed(1)} />
-            <SliderRow label="Offset X" value={textureOffset.x} onChange={(v) => setTextureOffset({ ...textureOffset, x: v })} min={0} max={1} step={0.01} />
-            <SliderRow label="Offset Y" value={textureOffset.y} onChange={(v) => setTextureOffset({ ...textureOffset, y: v })} min={0} max={1} step={0.01} />
-            <SliderRow label="Rotation" value={textureRotation} onChange={setTextureRotation} min={0} max={6.283} step={0.01} displayValue={`${Math.round(textureRotation * 180 / Math.PI)}°`} />
+            <SliderRow label="Repeat X" value={textureRepeat.x} onChange={(v) => updateSelected({ textureRepeat: { ...textureRepeat, x: v } })} min={0.1} max={10} step={0.1} displayValue={textureRepeat.x.toFixed(1)} />
+            <SliderRow label="Repeat Y" value={textureRepeat.y} onChange={(v) => updateSelected({ textureRepeat: { ...textureRepeat, y: v } })} min={0.1} max={10} step={0.1} displayValue={textureRepeat.y.toFixed(1)} />
+            <SliderRow label="Offset X" value={textureOffset.x} onChange={(v) => updateSelected({ textureOffset: { ...textureOffset, x: v } })} min={0} max={1} step={0.01} />
+            <SliderRow label="Offset Y" value={textureOffset.y} onChange={(v) => updateSelected({ textureOffset: { ...textureOffset, y: v } })} min={0} max={1} step={0.01} />
+            <SliderRow label="Rotation" value={textureRotation} onChange={(v) => updateSelected({ textureRotation: v })} min={0} max={6.283} step={0.01} displayValue={`${Math.round(textureRotation * 180 / Math.PI)}°`} />
           </div>
         </div>
       ) : (
@@ -370,39 +352,34 @@ export function MaterialPanel() {
         onChange={handleTextureUpload}
       />
 
-      {/* Common controls */}
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
         Properties
       </label>
       <div className="space-y-2.5">
-        <SliderRow label="Roughness" value={roughness} onChange={setRoughness} />
+        <SliderRow label="Roughness" value={roughness} onChange={(v) => updateSelected({ roughness: v })} />
 
-        {/* Glass-specific */}
         {material === 'glass' && (
           <>
-            <SliderRow label="Thickness" value={opacity} onChange={setOpacity} />
-            <SliderRow label="Transmission" value={transmission} onChange={setTransmission} />
-            <SliderRow label="IOR" value={ior} onChange={setIor} min={1.0} max={2.5} step={0.05} />
-            <SliderRow label="Reflectivity" value={reflectivity} onChange={setReflectivity} />
+            <SliderRow label="Thickness" value={opacity} onChange={(v) => updateSelected({ opacity: v })} />
+            <SliderRow label="Transmission" value={transmission} onChange={(v) => updateSelected({ transmission: v })} />
+            <SliderRow label="IOR" value={ior} onChange={(v) => updateSelected({ ior: v })} min={1.0} max={2.5} step={0.05} />
+            <SliderRow label="Reflectivity" value={reflectivity} onChange={(v) => updateSelected({ reflectivity: v })} />
           </>
         )}
 
-        {/* Metal-specific */}
         {material === 'metallic' && (
-          <SliderRow label="Metalness" value={metalness} onChange={setMetalness} />
+          <SliderRow label="Metalness" value={metalness} onChange={(v) => updateSelected({ metalness: v })} />
         )}
 
-        {/* Plastic-specific */}
         {material === 'plastic' && (
           <>
-            <SliderRow label="Clearcoat" value={clearcoat} onChange={setClearcoat} />
-            <SliderRow label="Metalness" value={metalness} onChange={setMetalness} />
+            <SliderRow label="Clearcoat" value={clearcoat} onChange={(v) => updateSelected({ clearcoat: v })} />
+            <SliderRow label="Metalness" value={metalness} onChange={(v) => updateSelected({ metalness: v })} />
           </>
         )}
 
-        {/* Glossy-specific */}
         {material === 'glossy' && (
-          <SliderRow label="Metalness" value={metalness} onChange={setMetalness} />
+          <SliderRow label="Metalness" value={metalness} onChange={(v) => updateSelected({ metalness: v })} />
         )}
       </div>
     </div>

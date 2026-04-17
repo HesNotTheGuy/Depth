@@ -4,7 +4,7 @@ import { Environment, ContactShadows } from '@react-three/drei';
 import { useSceneStore } from '../../store/useSceneStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useExportStore } from '../../store/useExportStore';
-import { SceneObject } from './SceneObject';
+import { SceneObjects } from './SceneObject';
 import { BackgroundPlane } from './BackgroundPlane';
 import { SceneLights } from './SceneLights';
 import { SurfaceDrawingOverlay } from './SurfaceDrawingOverlay';
@@ -81,8 +81,12 @@ function ThreeRefCapture() {
 }
 
 export function CompositeViewport() {
-  const scale = useSceneStore((s) => s.objectScale);
-  const setScale = useSceneStore((s) => s.setObjectScale);
+  const selectedObjectId = useSceneStore((s) => s.selectedObjectId);
+  const scale = useSceneStore((s) => s.objects.find((o) => o.id === s.selectedObjectId)?.scale ?? 1);
+  const updateObject = useSceneStore((s) => s.updateObject);
+  const setScale = useCallback((v: number) => {
+    if (selectedObjectId) updateObject(selectedObjectId, { scale: v });
+  }, [selectedObjectId, updateObject]);
   const blendMode = useSceneStore((s) => s.blendMode);
   const backgroundImage = useSceneStore((s) => s.backgroundImage);
   const canvasZoom = useUIStore((s) => s.canvasZoom);
@@ -243,7 +247,7 @@ export function CompositeViewport() {
             <BackgroundPlane />
             <SceneLighting />
             <SceneLights />
-            <SceneObject />
+            <SceneObjects />
           </Suspense>
           <Suspense fallback={null}>
             <Environment preset="studio" environmentIntensity={0.3} />

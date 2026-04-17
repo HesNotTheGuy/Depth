@@ -1,9 +1,18 @@
 import { useState, useMemo } from 'react';
 import { Search, Check } from 'lucide-react';
 import { useSceneStore } from '../../store/useSceneStore';
+import { useSelectedObject } from '../../hooks/useSelectedObject';
 import { sceneTemplates, type SceneTemplate } from '../../data/sceneTemplates';
 
-function isTemplateActive(template: SceneTemplate, store: ReturnType<typeof useSceneStore.getState>): boolean {
+interface TemplateSnapshot {
+  objectType?: string;
+  objectMaterial?: string;
+  objectColor?: string;
+  brightness: number;
+  shadowOpacity: number;
+}
+
+function isTemplateActive(template: SceneTemplate, store: TemplateSnapshot): boolean {
   const s = template.state;
   return (
     (s.objectType === undefined || s.objectType === store.objectType) &&
@@ -17,13 +26,17 @@ function isTemplateActive(template: SceneTemplate, store: ReturnType<typeof useS
 export function TemplatePanel() {
   const [filter, setFilter] = useState('');
   const applyTemplate = useSceneStore((s) => s.applyTemplate);
-  const objectType = useSceneStore((s) => s.objectType);
-  const objectMaterial = useSceneStore((s) => s.objectMaterial);
-  const objectColor = useSceneStore((s) => s.objectColor);
+  const selected = useSelectedObject();
   const brightness = useSceneStore((s) => s.brightness);
   const shadowOpacity = useSceneStore((s) => s.shadowOpacity);
 
-  const storeSnapshot = { objectType, objectMaterial, objectColor, brightness, shadowOpacity };
+  const storeSnapshot: TemplateSnapshot = {
+    objectType: selected?.type,
+    objectMaterial: selected?.material,
+    objectColor: selected?.color,
+    brightness,
+    shadowOpacity,
+  };
 
   const filtered = useMemo(() => {
     if (!filter.trim()) return sceneTemplates;
@@ -56,7 +69,7 @@ export function TemplatePanel() {
       {/* Template grid */}
       <div className="grid grid-cols-2 gap-2">
         {filtered.map((template) => {
-          const active = isTemplateActive(template, storeSnapshot as any);
+          const active = isTemplateActive(template, storeSnapshot);
           return (
             <button
               key={template.id}

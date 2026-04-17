@@ -26,7 +26,6 @@ export interface SceneLight {
   position: Vec3;
   color: string;
   intensity: number;
-  /** Whether this was auto-detected from the image */
   autoDetected: boolean;
   visible: boolean;
 }
@@ -43,9 +42,7 @@ export interface FaceTextureConfig {
 export interface SurfacePlane {
   id: string;
   name: string;
-  /** 4 corner points in normalized image coordinates (0-1) */
   corners: [Point2D, Point2D, Point2D, Point2D];
-  /** 3D plane properties derived from corners + user adjustments */
   position: Vec3;
   rotation: Vec3;
   size: { width: number; depth: number };
@@ -53,53 +50,121 @@ export interface SurfacePlane {
   color: string;
 }
 
+/** A single 3D object instance in the scene. */
+export interface SceneObjectInstance {
+  id: string;
+  name: string;
+  type: ObjectPreset;
+  customModelUrl: string | null;
+  position: Vec3;
+  rotation: Vec3;
+  scale: number;
+  color: string;
+  material: 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
+  roughness: number;
+  metalness: number;
+  transmission: number;
+  ior: number;
+  clearcoat: number;
+  opacity: number;
+  reflectivity: number;
+  texture: string | null;
+  textureRepeat: { x: number; y: number };
+  textureOffset: { x: number; y: number };
+  textureRotation: number;
+  faceTextures: Record<string, FaceTextureConfig>;
+  visible: boolean;
+}
+
+const PRESET_LABELS: Record<ObjectPreset, string> = {
+  box: 'Cube',
+  cylinder: 'Cylinder',
+  sphere: 'Sphere',
+  cone: 'Cone',
+  torus: 'Torus',
+  mug: 'Mug',
+  phone: 'Phone',
+  bottle: 'Bottle',
+  bag: 'Bag',
+  card: 'Card',
+  donut: 'Donut',
+  laptop: 'Laptop',
+  tablet: 'Tablet',
+  can: 'Can',
+  book: 'Book',
+  custom: 'Custom',
+};
+
+const MATERIAL_DEFAULTS: Record<SceneObjectInstance['material'], Partial<SceneObjectInstance>> = {
+  matte:    { roughness: 0.9, metalness: 0, opacity: 1.0 },
+  glossy:   { roughness: 0.1, metalness: 0, opacity: 1.0 },
+  metallic: { roughness: 0.3, metalness: 1.0, opacity: 1.0 },
+  glass:    { roughness: 0.05, metalness: 0, transmission: 1.0, ior: 1.5, opacity: 0.2, reflectivity: 0.5 },
+  plastic:  { roughness: 0.4, metalness: 0, clearcoat: 0.5, opacity: 1.0 },
+};
+
+export function makeDefaultObject(type: ObjectPreset, nameSuffix = 1): SceneObjectInstance {
+  const base: SceneObjectInstance = {
+    id: crypto.randomUUID(),
+    name: `${PRESET_LABELS[type]} ${nameSuffix}`,
+    type,
+    customModelUrl: null,
+    position: { x: 0, y: 0.5, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: 1,
+    color: '#cccccc',
+    material: 'matte',
+    roughness: 0.7,
+    metalness: 0,
+    transmission: 1.0,
+    ior: 1.5,
+    clearcoat: 0.5,
+    opacity: 1.0,
+    reflectivity: 0.5,
+    texture: null,
+    textureRepeat: { x: 1, y: 1 },
+    textureOffset: { x: 0, y: 0 },
+    textureRotation: 0,
+    faceTextures: {},
+    visible: true,
+  };
+  if (type === 'donut') {
+    // 🍩 Easter egg: pink icing
+    base.color = '#F472B6';
+    base.material = 'glossy';
+    base.roughness = 0.3;
+    base.metalness = 0;
+  }
+  return base;
+}
+
 interface SceneState {
   // Background plate
   backgroundImage: string | null;
   estimatedLighting: EstimatedLighting | null;
 
-  // 3D object
-  objectType: ObjectPreset;
-  customModelUrl: string | null;
-  objectPosition: Vec3;
-  objectRotation: Vec3;
-  objectScale: number;
-  objectColor: string;
-  objectMaterial: 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
-  objectRoughness: number;
-  objectMetalness: number;
-  objectTransmission: number;
-  objectIor: number;
-  objectClearcoat: number;
-  objectOpacity: number;
-  objectReflectivity: number;
-
-  // Texture / UV mapping
-  objectTexture: string | null;
-  textureRepeat: { x: number; y: number };
-  textureOffset: { x: number; y: number };
-  textureRotation: number;
-
-  // Face-based texture system
-  faceTextures: Record<string, FaceTextureConfig>;
+  // Objects
+  objects: SceneObjectInstance[];
+  selectedObjectId: string | null;
+  /** Face selection is transient / per-session — kept at top level. */
   selectedFace: string | null;
 
-  // Scene lights (positionable point lights)
+  // Scene lights
   sceneLights: SceneLight[];
 
-  // Surface planes
+  // Surfaces
   surfaces: SurfacePlane[];
   snapToSurface: boolean;
 
-  // Export settings
+  // Export
   exportScale: number;
   exportFilename: string;
   exportFormat: ExportFormat;
 
-  // Blend mode
+  // Blend
   blendMode: BlendMode;
 
-  // Lighting overrides
+  // Lighting
   brightness: number;
   lightAngle: number;
   lightElevation: number;
@@ -109,31 +174,24 @@ interface SceneState {
   shadowColor: string;
   autoLighting: boolean;
 
-  // Actions
+  // Actions — global
   setBackgroundImage: (dataUrl: string | null) => void;
   setEstimatedLighting: (lighting: EstimatedLighting | null) => void;
-  setObjectType: (type: ObjectPreset) => void;
-  setCustomModelUrl: (url: string | null) => void;
-  setObjectPosition: (pos: Vec3) => void;
-  setObjectRotation: (rot: Vec3) => void;
-  setObjectScale: (scale: number) => void;
-  setObjectColor: (color: string) => void;
-  setObjectMaterial: (mat: SceneState['objectMaterial']) => void;
-  setObjectRoughness: (r: number) => void;
-  setObjectMetalness: (m: number) => void;
-  setObjectTransmission: (t: number) => void;
-  setObjectIor: (i: number) => void;
-  setObjectClearcoat: (c: number) => void;
-  setObjectOpacity: (o: number) => void;
-  setObjectReflectivity: (r: number) => void;
-  setObjectTexture: (dataUrl: string | null) => void;
-  setTextureRepeat: (repeat: { x: number; y: number }) => void;
-  setTextureOffset: (offset: { x: number; y: number }) => void;
-  setTextureRotation: (rotation: number) => void;
+
+  // Actions — objects
+  addObject: (preset: ObjectPreset) => string;
+  removeObject: (id: string) => void;
+  duplicateObject: (id: string) => string;
+  selectObject: (id: string | null) => void;
+  updateObject: (id: string, updates: Partial<SceneObjectInstance>) => void;
+  updateSelected: (updates: Partial<SceneObjectInstance>) => void;
+  setObjectVisible: (id: string, visible: boolean) => void;
   setSelectedFace: (face: string | null) => void;
-  setFaceTexture: (face: string, url: string) => void;
-  removeFaceTexture: (face: string) => void;
-  setFaceTextureTransform: (face: string, transform: Partial<Pick<FaceTextureConfig, 'repeat' | 'offset' | 'rotation'>>) => void;
+  setFaceTextureForSelected: (face: string, url: string) => void;
+  removeFaceTextureForSelected: (face: string) => void;
+  setFaceTextureTransformForSelected: (face: string, transform: Partial<Pick<FaceTextureConfig, 'repeat' | 'offset' | 'rotation'>>) => void;
+
+  // Lighting
   setBrightness: (b: number) => void;
   setLightAngle: (a: number) => void;
   setLightElevation: (e: number) => void;
@@ -142,43 +200,35 @@ interface SceneState {
   setShadowSoftness: (s: number) => void;
   setShadowColor: (c: string) => void;
   setAutoLighting: (auto: boolean) => void;
+
+  // Scene lights
   addSceneLight: (light: SceneLight) => void;
   updateSceneLight: (id: string, updates: Partial<SceneLight>) => void;
   removeSceneLight: (id: string) => void;
+
+  // Surfaces
   addSurface: (surface: SurfacePlane) => void;
   updateSurface: (id: string, updates: Partial<SurfacePlane>) => void;
   removeSurface: (id: string) => void;
   setSnapToSurface: (snap: boolean) => void;
+
+  // Export / blend
   setExportScale: (scale: number) => void;
   setExportFilename: (filename: string) => void;
   setExportFormat: (format: ExportFormat) => void;
   setBlendMode: (mode: BlendMode) => void;
-  applyTemplate: (state: Partial<SceneState>) => void;
+
+  applyTemplate: (state: Partial<SceneState> & Record<string, unknown>) => void;
   reset: () => void;
 }
+
+const firstDefault = makeDefaultObject('box');
 
 const initialState = {
   backgroundImage: null as string | null,
   estimatedLighting: null as EstimatedLighting | null,
-  objectType: 'box' as ObjectPreset,
-  customModelUrl: null as string | null,
-  objectPosition: { x: 0, y: 0.5, z: 0 },
-  objectRotation: { x: 0, y: 0, z: 0 },
-  objectScale: 1,
-  objectColor: '#cccccc',
-  objectMaterial: 'matte' as SceneState['objectMaterial'],
-  objectRoughness: 0.7,
-  objectMetalness: 0,
-  objectTransmission: 1.0,
-  objectIor: 1.5,
-  objectClearcoat: 0.5,
-  objectOpacity: 1.0,
-  objectReflectivity: 0.5,
-  objectTexture: null as string | null,
-  textureRepeat: { x: 1, y: 1 },
-  textureOffset: { x: 0, y: 0 },
-  textureRotation: 0,
-  faceTextures: {} as Record<string, FaceTextureConfig>,
+  objects: [firstDefault] as SceneObjectInstance[],
+  selectedObjectId: firstDefault.id as string | null,
   selectedFace: null as string | null,
   brightness: 1.0,
   lightAngle: 45,
@@ -197,153 +247,290 @@ const initialState = {
   blendMode: 'normal' as BlendMode,
 };
 
+/** Count existing objects of a preset type to build a fresh unique name. */
+function nextName(objects: SceneObjectInstance[], type: ObjectPreset): string {
+  const base = PRESET_LABELS[type];
+  let n = 1;
+  const names = new Set(objects.map((o) => o.name));
+  while (names.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
+}
+
+/** Convert any old flat template state with objectX fields into a SceneObjectInstance partial. */
+function extractLegacyObjectFields(state: Record<string, unknown>): Partial<SceneObjectInstance> | null {
+  const mapping: Record<string, keyof SceneObjectInstance> = {
+    objectType: 'type',
+    objectColor: 'color',
+    objectMaterial: 'material',
+    objectRoughness: 'roughness',
+    objectMetalness: 'metalness',
+    objectTransmission: 'transmission',
+    objectIor: 'ior',
+    objectClearcoat: 'clearcoat',
+    objectOpacity: 'opacity',
+    objectReflectivity: 'reflectivity',
+    objectPosition: 'position',
+    objectRotation: 'rotation',
+    objectScale: 'scale',
+    objectTexture: 'texture',
+    textureRepeat: 'textureRepeat',
+    textureOffset: 'textureOffset',
+    textureRotation: 'textureRotation',
+    customModelUrl: 'customModelUrl',
+    faceTextures: 'faceTextures',
+  };
+  const out: Partial<SceneObjectInstance> = {};
+  let hit = false;
+  for (const [k, v] of Object.entries(state)) {
+    const target = mapping[k];
+    if (target !== undefined && v !== undefined) {
+      (out as Record<string, unknown>)[target] = v;
+      hit = true;
+    }
+  }
+  return hit ? out : null;
+}
+
 export const useSceneStore = create<SceneState>()(
   temporal(
-    (set) => ({
-  ...initialState,
+    (set, get) => ({
+      ...initialState,
 
-  setBackgroundImage: (dataUrl) => set({ backgroundImage: dataUrl }),
-  setEstimatedLighting: (lighting) => {
-    if (lighting) {
-      // Convert detected bright spots to 3D scene lights
-      const sceneLights: SceneLight[] = (lighting.detectedLights || []).map((spot, i) => ({
-        id: crypto.randomUUID(),
-        name: `Light ${i + 1}`,
-        // Map 2D image position to 3D: x centered, y = height, z = depth from image Y
-        position: {
-          x: (spot.x - 0.5) * 8,
-          y: 1 + (1 - spot.y) * 5,
-          z: (spot.y - 0.5) * -4,
-        },
-        color: spot.color,
-        intensity: spot.intensity * 2,
-        autoDetected: true,
-        visible: true,
-      }));
+      setBackgroundImage: (dataUrl) => set({ backgroundImage: dataUrl }),
+      setEstimatedLighting: (lighting) => {
+        if (lighting) {
+          const sceneLights: SceneLight[] = (lighting.detectedLights || []).map((spot, i) => ({
+            id: crypto.randomUUID(),
+            name: `Light ${i + 1}`,
+            position: {
+              x: (spot.x - 0.5) * 8,
+              y: 1 + (1 - spot.y) * 5,
+              z: (spot.y - 0.5) * -4,
+            },
+            color: spot.color,
+            intensity: spot.intensity * 2,
+            autoDetected: true,
+            visible: true,
+          }));
 
-      set({
-        estimatedLighting: lighting,
-        brightness: lighting.brightness,
-        lightAngle: lighting.lightAngle,
-        lightElevation: lighting.lightElevation,
-        lightColor: lighting.colorTemp,
-        shadowOpacity: lighting.contrast * 0.6,
-        sceneLights,
-      });
-    } else {
-      set({ estimatedLighting: null });
-    }
-  },
-  setObjectType: (type) => {
-    const update: Record<string, unknown> = { objectType: type };
-    // 🍩 Easter egg: auto-apply pink icing look
-    if (type === 'donut') {
-      update.objectColor = '#F472B6';
-      update.objectMaterial = 'glossy';
-      update.objectRoughness = 0.3;
-      update.objectMetalness = 0.0;
-    }
-    set(update);
-  },
-  setCustomModelUrl: (url) => set({ customModelUrl: url }),
-  setObjectPosition: (pos) => set({ objectPosition: pos }),
-  setObjectRotation: (rot) => set({ objectRotation: rot }),
-  setObjectScale: (scale) => set({ objectScale: scale }),
-  setObjectColor: (color) => set({ objectColor: color }),
-  setObjectMaterial: (mat) => {
-    const defaults: Record<string, Partial<SceneState>> = {
-      matte:    { objectRoughness: 0.9, objectMetalness: 0, objectOpacity: 1.0 },
-      glossy:   { objectRoughness: 0.1, objectMetalness: 0, objectOpacity: 1.0 },
-      metallic: { objectRoughness: 0.3, objectMetalness: 1.0, objectOpacity: 1.0 },
-      glass:    { objectRoughness: 0.05, objectMetalness: 0, objectTransmission: 1.0, objectIor: 1.5, objectOpacity: 0.2, objectReflectivity: 0.5 },
-      plastic:  { objectRoughness: 0.4, objectMetalness: 0, objectClearcoat: 0.5, objectOpacity: 1.0 },
-    };
-    set({ objectMaterial: mat, ...defaults[mat] });
-  },
-  setObjectRoughness: (r) => set({ objectRoughness: r }),
-  setObjectMetalness: (m) => set({ objectMetalness: m }),
-  setObjectTransmission: (t) => set({ objectTransmission: t }),
-  setObjectIor: (i) => set({ objectIor: i }),
-  setObjectClearcoat: (c) => set({ objectClearcoat: c }),
-  setObjectOpacity: (o) => set({ objectOpacity: o }),
-  setObjectReflectivity: (r) => set({ objectReflectivity: r }),
-  setObjectTexture: (dataUrl) => set({ objectTexture: dataUrl }),
-  setTextureRepeat: (repeat) => set({ textureRepeat: repeat }),
-  setTextureOffset: (offset) => set({ textureOffset: offset }),
-  setTextureRotation: (rotation) => set({ textureRotation: rotation }),
-  setSelectedFace: (face) => set({ selectedFace: face }),
-  setFaceTexture: (face, url) =>
-    set((s) => ({
-      faceTextures: {
-        ...s.faceTextures,
-        [face]: {
-          url,
-          repeat: { x: 1, y: 1 },
-          offset: { x: 0, y: 0 },
-          rotation: 0,
-        },
+          set({
+            estimatedLighting: lighting,
+            brightness: lighting.brightness,
+            lightAngle: lighting.lightAngle,
+            lightElevation: lighting.lightElevation,
+            lightColor: lighting.colorTemp,
+            shadowOpacity: lighting.contrast * 0.6,
+            sceneLights,
+          });
+        } else {
+          set({ estimatedLighting: null });
+        }
       },
-    })),
-  removeFaceTexture: (face) =>
-    set((s) => {
-      const next = { ...s.faceTextures };
-      delete next[face];
-      return { faceTextures: next };
-    }),
-  setFaceTextureTransform: (face, transform) =>
-    set((s) => {
-      const existing = s.faceTextures[face];
-      if (!existing) return {};
-      return {
-        faceTextures: {
-          ...s.faceTextures,
-          [face]: {
-            ...existing,
-            ...(transform.repeat !== undefined ? { repeat: transform.repeat } : {}),
-            ...(transform.offset !== undefined ? { offset: transform.offset } : {}),
-            ...(transform.rotation !== undefined ? { rotation: transform.rotation } : {}),
-          },
-        },
-      };
-    }),
-  setBrightness: (b) => set({ brightness: b }),
-  setLightAngle: (a) => set({ lightAngle: a }),
-  setLightElevation: (e) => set({ lightElevation: e }),
-  setLightColor: (c) => set({ lightColor: c }),
-  setShadowOpacity: (o) => set({ shadowOpacity: o }),
-  setShadowSoftness: (s) => set({ shadowSoftness: s }),
-  setShadowColor: (c) => set({ shadowColor: c }),
-  setAutoLighting: (auto) => set({ autoLighting: auto }),
-  addSceneLight: (light) => set((s) => ({ sceneLights: [...s.sceneLights, light] })),
-  updateSceneLight: (id, updates) =>
-    set((s) => ({
-      sceneLights: s.sceneLights.map((l) => (l.id === id ? { ...l, ...updates } : l)),
-    })),
-  removeSceneLight: (id) => set((s) => ({ sceneLights: s.sceneLights.filter((l) => l.id !== id) })),
-  addSurface: (surface) => set((s) => ({ surfaces: [...s.surfaces, surface] })),
-  updateSurface: (id, updates) =>
-    set((s) => ({
-      surfaces: s.surfaces.map((p) => (p.id === id ? { ...p, ...updates } : p)),
-    })),
-  removeSurface: (id) => set((s) => ({ surfaces: s.surfaces.filter((p) => p.id !== id) })),
-  setSnapToSurface: (snap) => set({ snapToSurface: snap }),
-  setExportScale: (scale) => set({ exportScale: scale }),
-  setExportFilename: (filename) => set({ exportFilename: filename }),
-  setExportFormat: (format) => set({ exportFormat: format }),
-  setBlendMode: (mode) => set({ blendMode: mode }),
-  applyTemplate: (templateState) => set(templateState),
-  reset: () => set(initialState),
+
+      addObject: (preset) => {
+        const existing = get().objects;
+        const obj = makeDefaultObject(preset);
+        obj.name = nextName(existing, preset);
+        // Offset so new objects don't fully stack
+        obj.position = {
+          x: existing.length * 0.3,
+          y: 0.5,
+          z: 0,
+        };
+        set({ objects: [...existing, obj], selectedObjectId: obj.id });
+        return obj.id;
+      },
+
+      removeObject: (id) =>
+        set((s) => {
+          const next = s.objects.filter((o) => o.id !== id);
+          const wasSelected = s.selectedObjectId === id;
+          return {
+            objects: next,
+            selectedObjectId: wasSelected ? (next[0]?.id ?? null) : s.selectedObjectId,
+            selectedFace: wasSelected ? null : s.selectedFace,
+          };
+        }),
+
+      duplicateObject: (id) => {
+        const src = get().objects.find((o) => o.id === id);
+        if (!src) return id;
+        const copy: SceneObjectInstance = {
+          ...src,
+          id: crypto.randomUUID(),
+          name: `${src.name} (copy)`,
+          position: { x: src.position.x + 0.3, y: src.position.y, z: src.position.z + 0.3 },
+          // Shallow-copy nested records so mutation doesn't leak between instances
+          faceTextures: { ...src.faceTextures },
+          textureRepeat: { ...src.textureRepeat },
+          textureOffset: { ...src.textureOffset },
+          rotation: { ...src.rotation },
+        };
+        set((s) => ({ objects: [...s.objects, copy], selectedObjectId: copy.id }));
+        return copy.id;
+      },
+
+      selectObject: (id) => set({ selectedObjectId: id, selectedFace: null }),
+
+      updateObject: (id, updates) =>
+        set((s) => ({
+          objects: s.objects.map((o) => {
+            if (o.id !== id) return o;
+            // When material changes, apply material preset defaults.
+            if (updates.material && updates.material !== o.material) {
+              return { ...o, ...MATERIAL_DEFAULTS[updates.material], ...updates };
+            }
+            // Donut easter-egg: when switching type to donut, apply pink-icing look
+            if (updates.type && updates.type !== o.type && updates.type === 'donut') {
+              return {
+                ...o,
+                ...updates,
+                color: '#F472B6',
+                material: 'glossy',
+                roughness: 0.3,
+                metalness: 0,
+              };
+            }
+            return { ...o, ...updates };
+          }),
+        })),
+
+      updateSelected: (updates) => {
+        const id = get().selectedObjectId;
+        if (!id) return;
+        get().updateObject(id, updates);
+      },
+
+      setObjectVisible: (id, visible) => get().updateObject(id, { visible }),
+
+      setSelectedFace: (face) => set({ selectedFace: face }),
+
+      setFaceTextureForSelected: (face, url) => {
+        const id = get().selectedObjectId;
+        if (!id) return;
+        set((s) => ({
+          objects: s.objects.map((o) =>
+            o.id === id
+              ? {
+                  ...o,
+                  faceTextures: {
+                    ...o.faceTextures,
+                    [face]: { url, repeat: { x: 1, y: 1 }, offset: { x: 0, y: 0 }, rotation: 0 },
+                  },
+                }
+              : o
+          ),
+        }));
+      },
+
+      removeFaceTextureForSelected: (face) => {
+        const id = get().selectedObjectId;
+        if (!id) return;
+        set((s) => ({
+          objects: s.objects.map((o) => {
+            if (o.id !== id) return o;
+            const next = { ...o.faceTextures };
+            delete next[face];
+            return { ...o, faceTextures: next };
+          }),
+        }));
+      },
+
+      setFaceTextureTransformForSelected: (face, transform) => {
+        const id = get().selectedObjectId;
+        if (!id) return;
+        set((s) => ({
+          objects: s.objects.map((o) => {
+            if (o.id !== id) return o;
+            const existing = o.faceTextures[face];
+            if (!existing) return o;
+            return {
+              ...o,
+              faceTextures: {
+                ...o.faceTextures,
+                [face]: {
+                  ...existing,
+                  ...(transform.repeat !== undefined ? { repeat: transform.repeat } : {}),
+                  ...(transform.offset !== undefined ? { offset: transform.offset } : {}),
+                  ...(transform.rotation !== undefined ? { rotation: transform.rotation } : {}),
+                },
+              },
+            };
+          }),
+        }));
+      },
+
+      setBrightness: (b) => set({ brightness: b }),
+      setLightAngle: (a) => set({ lightAngle: a }),
+      setLightElevation: (e) => set({ lightElevation: e }),
+      setLightColor: (c) => set({ lightColor: c }),
+      setShadowOpacity: (o) => set({ shadowOpacity: o }),
+      setShadowSoftness: (s) => set({ shadowSoftness: s }),
+      setShadowColor: (c) => set({ shadowColor: c }),
+      setAutoLighting: (auto) => set({ autoLighting: auto }),
+
+      addSceneLight: (light) => set((s) => ({ sceneLights: [...s.sceneLights, light] })),
+      updateSceneLight: (id, updates) =>
+        set((s) => ({ sceneLights: s.sceneLights.map((l) => (l.id === id ? { ...l, ...updates } : l)) })),
+      removeSceneLight: (id) => set((s) => ({ sceneLights: s.sceneLights.filter((l) => l.id !== id) })),
+
+      addSurface: (surface) => set((s) => ({ surfaces: [...s.surfaces, surface] })),
+      updateSurface: (id, updates) =>
+        set((s) => ({ surfaces: s.surfaces.map((p) => (p.id === id ? { ...p, ...updates } : p)) })),
+      removeSurface: (id) => set((s) => ({ surfaces: s.surfaces.filter((p) => p.id !== id) })),
+      setSnapToSurface: (snap) => set({ snapToSurface: snap }),
+
+      setExportScale: (scale) => set({ exportScale: scale }),
+      setExportFilename: (filename) => set({ exportFilename: filename }),
+      setExportFormat: (format) => set({ exportFormat: format }),
+      setBlendMode: (mode) => set({ blendMode: mode }),
+
+      applyTemplate: (templateState) => {
+        const legacy = extractLegacyObjectFields(templateState as Record<string, unknown>);
+        const partial: Partial<SceneState> = { ...(templateState as Partial<SceneState>) };
+        if (legacy) {
+          // Build a single-object array, merging legacy fields with preset defaults
+          const type = (legacy.type ?? 'box') as ObjectPreset;
+          const obj = makeDefaultObject(type);
+          Object.assign(obj, legacy);
+          // Re-apply material defaults if material was set, then re-overlay legacy
+          // to honor explicit roughness/metalness etc. in the template.
+          if (legacy.material) {
+            Object.assign(obj, MATERIAL_DEFAULTS[legacy.material], legacy);
+          }
+          partial.objects = [obj];
+          partial.selectedObjectId = obj.id;
+          // Strip legacy flat fields from partial so zustand doesn't write unknown keys.
+          const legacyKeys = [
+            'objectType', 'objectColor', 'objectMaterial', 'objectRoughness', 'objectMetalness',
+            'objectTransmission', 'objectIor', 'objectClearcoat', 'objectOpacity', 'objectReflectivity',
+            'objectPosition', 'objectRotation', 'objectScale', 'objectTexture',
+            'textureRepeat', 'textureOffset', 'textureRotation', 'customModelUrl', 'faceTextures',
+          ];
+          for (const k of legacyKeys) {
+            delete (partial as Record<string, unknown>)[k];
+          }
+        }
+        set(partial);
+      },
+
+      reset: () => {
+        const fresh = makeDefaultObject('box');
+        set({
+          ...initialState,
+          objects: [fresh],
+          selectedObjectId: fresh.id,
+        });
+      },
     }),
     {
       limit: 50,
-      // Exclude transient/derived fields from history
       partialize: (state) => {
         const { selectedFace, estimatedLighting, ...rest } = state;
         void selectedFace;
         void estimatedLighting;
         return rest;
       },
-      // Avoid recording trivial micro-changes (e.g. slider drags with no net effect)
       equality: (a, b) => JSON.stringify(a) === JSON.stringify(b),
     }
   )
