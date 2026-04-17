@@ -8,7 +8,7 @@ import { SceneObjects } from './SceneObject';
 import { BackgroundPlane } from './BackgroundPlane';
 import { SceneLights } from './SceneLights';
 import { SurfaceDrawingOverlay } from './SurfaceDrawingOverlay';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, Move3d, RotateCcw, Maximize } from 'lucide-react';
 
 function SceneLighting() {
   const brightness = useSceneStore((s) => s.brightness);
@@ -94,6 +94,8 @@ export function CompositeViewport() {
   const setCanvasZoom = useUIStore((s) => s.setCanvasZoom);
   const setCanvasPan = useUIStore((s) => s.setCanvasPan);
   const fitToScreen = useUIStore((s) => s.fitToScreen);
+  const gizmoMode = useUIStore((s) => s.gizmoMode);
+  const setGizmoMode = useUIStore((s) => s.setGizmoMode);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
@@ -118,6 +120,23 @@ export function CompositeViewport() {
     };
     img.src = backgroundImage;
   }, [backgroundImage]);
+
+  // Keyboard shortcuts for gizmo mode (W/E/R)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'w' || e.key === 'W') setGizmoMode('translate');
+      else if (e.key === 'e' || e.key === 'E') setGizmoMode('rotate');
+      else if (e.key === 'r' || e.key === 'R') setGizmoMode('scale');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setGizmoMode]);
 
   // Wheel: Ctrl/Meta+Scroll = canvas zoom, Alt+Scroll = canvas zoom, plain Scroll = object scale
   // Zoom is anchored to the mouse position so the user can zoom toward a target area.
@@ -257,6 +276,33 @@ export function CompositeViewport() {
         {/* Surface drawing overlay */}
         <SurfaceDrawingOverlay />
       </div>
+
+      {/* Transform gizmo toolbar (top-left) */}
+      {selectedObjectId && (
+        <div className="absolute top-3 left-3 flex items-center gap-1 pointer-events-auto bg-black/60 backdrop-blur-md border border-white/10 rounded-md p-1">
+          {([
+            { mode: 'translate' as const, Icon: Move3d, label: 'Translate (W)' },
+            { mode: 'rotate' as const, Icon: RotateCcw, label: 'Rotate (E)' },
+            { mode: 'scale' as const, Icon: Maximize, label: 'Scale (R)' },
+          ]).map(({ mode, Icon, label }) => {
+            const active = gizmoMode === mode;
+            return (
+              <button
+                key={mode}
+                onClick={() => setGizmoMode(mode)}
+                title={label}
+                className={`p-1.5 rounded transition-colors ${
+                  active
+                    ? 'bg-primary text-white'
+                    : 'text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                <Icon size={14} />
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Zoom controls */}
       <div className="absolute top-3 right-3 flex items-center gap-1.5 pointer-events-auto">

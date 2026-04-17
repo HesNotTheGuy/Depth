@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
-import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image, Undo2, Redo2 } from 'lucide-react';
+import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image, Undo2, Redo2, Keyboard } from 'lucide-react';
 import { useUIStore } from '../store/useUIStore';
 import { useSceneStore } from '../store/useSceneStore';
 import { useHistory } from '../hooks/useHistory';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { CompositeViewport } from './viewport/CompositeViewport';
 import { ObjectPanel } from './panels/ObjectPanel';
 import { LightingPanel } from './panels/LightingPanel';
@@ -10,6 +10,7 @@ import { MaterialPanel } from './panels/MaterialPanel';
 import { SurfacesPanel } from './panels/SurfacesPanel';
 import { TemplatePanel } from './panels/TemplatePanel';
 import { ExportPanel } from './panels/ExportPanel';
+import { ShortcutsOverlay } from './ShortcutsOverlay';
 import type { SidebarTab } from '../store/useUIStore';
 
 const tabs: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
@@ -28,27 +29,9 @@ export function Editor() {
   const reset = useSceneStore((s) => s.reset);
   const surfaceCount = useSceneStore((s) => s.surfaces.length);
   const { undo, redo, canUndo, canRedo } = useHistory();
+  const setShowShortcuts = useUIStore((s) => s.setShowShortcuts);
 
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
-        return;
-      }
-      const mod = e.ctrlKey || e.metaKey;
-      if (!mod) return;
-      const key = e.key.toLowerCase();
-      if (key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        if (canUndo) undo();
-      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
-        e.preventDefault();
-        if (canRedo) redo();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo, redo, canUndo, canRedo]);
+  useKeyboardShortcuts();
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -89,6 +72,13 @@ export function Editor() {
             title="Redo (Ctrl+Shift+Z)"
           >
             <Redo2 size={15} />
+          </button>
+          <button
+            onClick={() => setShowShortcuts(true)}
+            className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-text-primary transition-colors"
+            title="Keyboard shortcuts (?)"
+          >
+            <Keyboard size={15} />
           </button>
           <button
             onClick={() => setSidebarTab('export')}
@@ -146,6 +136,18 @@ export function Editor() {
           </div>
         </div>
       </div>
+
+      {/* Floating help hint */}
+      <button
+        onClick={() => setShowShortcuts(true)}
+        className="fixed bottom-4 right-[336px] z-40 w-8 h-8 rounded-full bg-surface-raised border border-panel-border text-text-muted hover:text-text-primary hover:bg-white/5 shadow-lg text-xs font-semibold transition-colors"
+        title="Keyboard shortcuts (?)"
+        aria-label="Show keyboard shortcuts"
+      >
+        ?
+      </button>
+
+      <ShortcutsOverlay />
     </div>
   );
 }

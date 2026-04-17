@@ -1,9 +1,11 @@
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
+import { TransformControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance } from '../../store/useSceneStore';
+import { useUIStore } from '../../store/useUIStore';
 import { findSurfaceBelow } from '../../utils/surfaceUtils';
 
 /**
@@ -349,11 +351,13 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   const selectObject = useSceneStore((s) => s.selectObject);
   const selectedFace = useSceneStore((s) => s.selectedFace);
   const setSelectedFace = useSceneStore((s) => s.setSelectedFace);
+  const gizmoMode = useUIStore((s) => s.gizmoMode);
   const invalidate = useThree((s) => s.invalidate);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
 
   const dragging = useRef(false);
+  const gizmoDragging = useRef(false);
   const dragButton = useRef(0);
   const dragStart = useRef<{ x: number; y: number; pos: typeof position; rot: typeof rotation }>({
     x: 0, y: 0, pos: position, rot: rotation,
@@ -476,6 +480,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
 
   // Drag handlers
   const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (gizmoDragging.current) return;
     e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
     dragging.current = true;
@@ -486,6 +491,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   }, [position, rotation, id, selectObject]);
 
   const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (gizmoDragging.current) return;
     if (!dragging.current) return;
     e.stopPropagation();
     const dx = e.clientX - dragStart.current.x;
@@ -528,6 +534,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   }, [camera, size, position, id, updateObject]);
 
   const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (gizmoDragging.current) return;
     dragging.current = false;
     if (dragButton.current === 0 && pointerDownPos.current && geometry) {
       const dx = e.clientX - pointerDownPos.current.x;
@@ -584,6 +591,8 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   }, [materials]);
 
   const meshRef = useRef<THREE.Mesh>(null);
+  const groupRef = useRef<THREE.Group>(null);
+  const [groupReady, setGroupReady] = useState(false);
 
   useEffect(() => {
     if (!meshRef.current) return;
@@ -592,6 +601,27 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     }
     invalidate();
   }, [useMultiMaterial, materials, invalidate]);
+
+  // Sync the group transform from the store when the gizmo isn't actively dragging.
+  useEffect(() => {
+    if (gizmoDragging.current) return;
+    const g = groupRef.current;
+    if (!g) return;
+    g.position.set(position.x, position.y, position.z);
+    g.rotation.set(rotation.x, rotation.y, rotation.z);
+    g.scale.setScalar(scale);
+    invalidate();
+  }, [position.x, position.y, position.z, rotation.x, rotation.y, rotation.z, scale, invalidate]);
+
+  const onGizmoChange = useCallback(() => {
+    const g = groupRef.current;
+    if (!g) return;
+    updateObject(id, {
+      position: { x: g.position.x, y: g.position.y, z: g.position.z },
+      rotation: { x: g.rotation.x, y: g.rotation.y, z: g.rotation.z },
+      scale: g.scale.x,
+    });
+  }, [id, updateObject]);
 
   if (!geometry || !visible) return null;
 
@@ -603,34 +633,41 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   }, [geometry]);
 
   return (
-    <group
-      position={[position.x, position.y, position.z]}
-      rotation={[rotation.x, rotation.y, rotation.z]}
-      scale={scale}
-    >
-      <mesh
-        ref={meshRef}
-        castShadow
-        receiveShadow
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerLeave={() => { dragging.current = false; }}
-      >
-        <primitive object={geometry} attach="geometry" />
-        {!useMultiMaterial && (needsPhysical ? (
-          <meshPhysicalMaterial {...singleMaterial} />
-        ) : (
-          <meshStandardMaterial {...singleMaterial} />
-        ))}
-      </mesh>
-      {isSelected && (
-        <mesh raycast={() => null}>
-          <sphereGeometry args={[selectionRadius, 24, 16]} />
-          <meshBasicMaterial color="#3b82f6" wireframe transparent opacity={0.35} depthTest={false} />
+    <>
+      <group ref={(el) => { groupRef.current = el; if (el && !groupReady) setGroupReady(true); }}>
+        <mesh
+          ref={meshRef}
+          castShadow
+          receiveShadow
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerLeave={() => { dragging.current = false; }}
+        >
+          <primitive object={geometry} attach="geometry" />
+          {!useMultiMaterial && (needsPhysical ? (
+            <meshPhysicalMaterial {...singleMaterial} />
+          ) : (
+            <meshStandardMaterial {...singleMaterial} />
+          ))}
         </mesh>
+        {isSelected && (
+          <mesh raycast={() => null}>
+            <sphereGeometry args={[selectionRadius, 24, 16]} />
+            <meshBasicMaterial color="#3b82f6" wireframe transparent opacity={0.35} depthTest={false} />
+          </mesh>
+        )}
+      </group>
+      {isSelected && groupReady && groupRef.current && (
+        <TransformControls
+          object={groupRef.current}
+          mode={gizmoMode}
+          onObjectChange={onGizmoChange}
+          onMouseDown={() => { gizmoDragging.current = true; }}
+          onMouseUp={() => { gizmoDragging.current = false; onGizmoChange(); }}
+        />
       )}
-    </group>
+    </>
   );
 }
 
