@@ -636,6 +636,170 @@ static std::vector<Triangle> generate_donut(int ring_segs = 24, int tube_segs = 
     return tris;
 }
 
+// Helper: emit 6-face box given half-extents and center
+static void emit_box_faces(std::vector<Triangle>& tris, Vec3 center, float hw, float hh, float hd) {
+    struct Face { Vec3 n; Vec3 corners[4]; };
+    const Vec3& o = center;
+    const Face faces[] = {
+        {{0,0,1},  {{o.x+hw,o.y+hh,o.z+hd},{o.x-hw,o.y+hh,o.z+hd},{o.x-hw,o.y-hh,o.z+hd},{o.x+hw,o.y-hh,o.z+hd}}},
+        {{0,0,-1}, {{o.x-hw,o.y+hh,o.z-hd},{o.x+hw,o.y+hh,o.z-hd},{o.x+hw,o.y-hh,o.z-hd},{o.x-hw,o.y-hh,o.z-hd}}},
+        {{1,0,0},  {{o.x+hw,o.y+hh,o.z-hd},{o.x+hw,o.y+hh,o.z+hd},{o.x+hw,o.y-hh,o.z+hd},{o.x+hw,o.y-hh,o.z-hd}}},
+        {{-1,0,0}, {{o.x-hw,o.y+hh,o.z+hd},{o.x-hw,o.y+hh,o.z-hd},{o.x-hw,o.y-hh,o.z-hd},{o.x-hw,o.y-hh,o.z+hd}}},
+        {{0,1,0},  {{o.x+hw,o.y+hh,o.z-hd},{o.x-hw,o.y+hh,o.z-hd},{o.x-hw,o.y+hh,o.z+hd},{o.x+hw,o.y+hh,o.z+hd}}},
+        {{0,-1,0}, {{o.x+hw,o.y-hh,o.z+hd},{o.x-hw,o.y-hh,o.z+hd},{o.x-hw,o.y-hh,o.z-hd},{o.x+hw,o.y-hh,o.z-hd}}},
+    };
+    const Vec2 uvs[4] = {{1,1},{0,1},{0,0},{1,0}};
+    for (auto& f : faces) {
+        tris.push_back({{{f.corners[0], f.n, uvs[0]}, {f.corners[1], f.n, uvs[1]}, {f.corners[2], f.n, uvs[2]}}});
+        tris.push_back({{{f.corners[0], f.n, uvs[0]}, {f.corners[2], f.n, uvs[2]}, {f.corners[3], f.n, uvs[3]}}});
+    }
+}
+
+// Rotate a point around X axis by angle radians
+static Vec3 rotate_x(Vec3 p, float angle) {
+    float c = std::cos(angle), s = std::sin(angle);
+    return {p.x, p.y * c - p.z * s, p.y * s + p.z * c};
+}
+
+static std::vector<Triangle> generate_laptop() {
+    std::vector<Triangle> tris;
+    // Base: 1.0 x 0.05 x 0.7, centered at y=-0.025
+    emit_box_faces(tris, Vec3{0, -0.025f, 0}, 0.5f, 0.025f, 0.35f);
+
+    // Screen: 1.0 x 0.6 x 0.03, tilted back 100deg, hinge at back edge
+    // Pre-rotation vertices: screen local box centered at (0, 0.3, -0.015) i.e. bottom at y=0, back at z=0
+    float shw = 0.5f, shh = 0.3f, shd = 0.015f;
+    float tilt = -(100.0f * static_cast<float>(M_PI) / 180.0f);
+    Vec3 screen_center_local = {0, shh, -shd};
+    Vec3 hinge_offset = {0, 0, -0.35f}; // move back to base hinge
+
+    // Build 8 corners then rotate + translate
+    Vec3 local[8] = {
+        { shw,  shh*0+0,  shd*0+0}, // not used simplified — build per face
+    };
+    (void)local;
+
+    // Emit 6 faces with per-face normal also rotated
+    struct Face { Vec3 n; Vec3 corners[4]; };
+    Face faces[] = {
+        {{0,0,1},  {{ shw,  2*shh,  0},{-shw,  2*shh,  0},{-shw,  0,  0},{ shw,  0,  0}}},
+        {{0,0,-1}, {{-shw,  2*shh, -2*shd},{ shw,  2*shh, -2*shd},{ shw,  0, -2*shd},{-shw,  0, -2*shd}}},
+        {{1,0,0},  {{ shw,  2*shh, -2*shd},{ shw,  2*shh,  0},{ shw,  0,  0},{ shw,  0, -2*shd}}},
+        {{-1,0,0}, {{-shw,  2*shh,  0},{-shw,  2*shh, -2*shd},{-shw,  0, -2*shd},{-shw,  0,  0}}},
+        {{0,1,0},  {{ shw,  2*shh, -2*shd},{-shw,  2*shh, -2*shd},{-shw,  2*shh,  0},{ shw,  2*shh,  0}}},
+        {{0,-1,0}, {{ shw,  0,  0},{-shw,  0,  0},{-shw,  0, -2*shd},{ shw,  0, -2*shd}}},
+    };
+    (void)screen_center_local;
+    const Vec2 uvs[4] = {{1,1},{0,1},{0,0},{1,0}};
+    for (auto& f : faces) {
+        Vec3 n = rotate_x(f.n, tilt);
+        Vec3 c0 = rotate_x(f.corners[0], tilt); c0.x += hinge_offset.x; c0.y += hinge_offset.y; c0.z += hinge_offset.z;
+        Vec3 c1 = rotate_x(f.corners[1], tilt); c1.x += hinge_offset.x; c1.y += hinge_offset.y; c1.z += hinge_offset.z;
+        Vec3 c2 = rotate_x(f.corners[2], tilt); c2.x += hinge_offset.x; c2.y += hinge_offset.y; c2.z += hinge_offset.z;
+        Vec3 c3 = rotate_x(f.corners[3], tilt); c3.x += hinge_offset.x; c3.y += hinge_offset.y; c3.z += hinge_offset.z;
+        tris.push_back({{{c0, n, uvs[0]}, {c1, n, uvs[1]}, {c2, n, uvs[2]}}});
+        tris.push_back({{{c0, n, uvs[0]}, {c2, n, uvs[2]}, {c3, n, uvs[3]}}});
+    }
+
+    // Recenter: compute bbox and translate
+    Vec3 mn = {1e9f, 1e9f, 1e9f}, mx = {-1e9f, -1e9f, -1e9f};
+    for (auto& t : tris) for (auto& v : t.v) {
+        mn.x = std::min(mn.x, v.pos.x); mn.y = std::min(mn.y, v.pos.y); mn.z = std::min(mn.z, v.pos.z);
+        mx.x = std::max(mx.x, v.pos.x); mx.y = std::max(mx.y, v.pos.y); mx.z = std::max(mx.z, v.pos.z);
+    }
+    Vec3 c = {(mn.x+mx.x)*0.5f, (mn.y+mx.y)*0.5f, (mn.z+mx.z)*0.5f};
+    for (auto& t : tris) for (auto& v : t.v) {
+        v.pos.x -= c.x; v.pos.y -= c.y; v.pos.z -= c.z;
+    }
+    return tris;
+}
+
+static std::vector<Triangle> generate_tablet() {
+    // Rounded rect extruded — approximate as a box since corner radius is small
+    // Dimensions: 1.2 wide (2*0.6) x 1.7 tall (2*0.85) x 0.04 thick
+    // Match web: flat in XZ plane (rotateX(-PI/2) makes depth axis Y)
+    // Web rotates the extruded shape from Z-extrude to Y-extrude, so final dims: w=1.2, thickness=0.04 (Y), h=1.7 (Z)
+    std::vector<Triangle> tris;
+    emit_box_faces(tris, Vec3{0, 0, 0}, 0.6f, 0.02f, 0.85f);
+    return tris;
+}
+
+static std::vector<Triangle> generate_can(int segs = 32) {
+    std::vector<Triangle> tris;
+    float r = 0.3f, hh = 0.4f;
+    // Body
+    for (int i = 0; i < segs; i++) {
+        float a0 = 2.0f * static_cast<float>(M_PI) * i / segs;
+        float a1 = 2.0f * static_cast<float>(M_PI) * (i + 1) / segs;
+        float c0 = std::cos(a0), s0 = std::sin(a0);
+        float c1 = std::cos(a1), s1 = std::sin(a1);
+
+        Vec3 p0t = {r*c0, hh, r*s0}, p1t = {r*c1, hh, r*s1};
+        Vec3 p0b = {r*c0, -hh, r*s0}, p1b = {r*c1, -hh, r*s1};
+        Vec3 n0 = {c0, 0, s0}, n1 = {c1, 0, s1};
+
+        float u0 = static_cast<float>(i) / segs;
+        float u1 = static_cast<float>(i + 1) / segs;
+
+        tris.push_back({{{p0t, n0, {u0,1}}, {p0b, n0, {u0,0}}, {p1b, n1, {u1,0}}}});
+        tris.push_back({{{p0t, n0, {u0,1}}, {p1b, n1, {u1,0}}, {p1t, n1, {u1,1}}}});
+
+        // Top inset cap — slightly recessed and smaller
+        float tr = 0.28f;
+        float ty = hh - 0.015f;
+        Vec3 pt0 = {tr*c0, ty, tr*s0}, pt1 = {tr*c1, ty, tr*s1};
+        Vec3 top_n = {0, 1, 0};
+        tris.push_back({{{Vec3{0,ty,0}, top_n, {0.5f,0.5f}},
+                         {pt0, top_n, {c0*0.5f+0.5f, s0*0.5f+0.5f}},
+                         {pt1, top_n, {c1*0.5f+0.5f, s1*0.5f+0.5f}}}});
+
+        // Bottom cap
+        Vec3 bot_n = {0, -1, 0};
+        tris.push_back({{{Vec3{0,-hh,0}, bot_n, {0.5f,0.5f}},
+                         {p1b, bot_n, {c1*0.5f+0.5f, s1*0.5f+0.5f}},
+                         {p0b, bot_n, {c0*0.5f+0.5f, s0*0.5f+0.5f}}}});
+    }
+
+    // Top lid seam — small torus at y=hh
+    auto emit_seam = [&](float cy) {
+        float R = 0.3f, tr = 0.012f;
+        int ring_segs = segs, tube_segs = 8;
+        for (int i = 0; i < ring_segs; i++) {
+            float th0 = 2.0f * static_cast<float>(M_PI) * i / ring_segs;
+            float th1 = 2.0f * static_cast<float>(M_PI) * (i + 1) / ring_segs;
+            for (int j = 0; j < tube_segs; j++) {
+                float ph0 = 2.0f * static_cast<float>(M_PI) * j / tube_segs;
+                float ph1 = 2.0f * static_cast<float>(M_PI) * (j + 1) / tube_segs;
+                auto pt = [&](float th, float ph) -> Vec3 {
+                    float ct = std::cos(th), st = std::sin(th);
+                    float cp = std::cos(ph), sp = std::sin(ph);
+                    return {(R + tr*cp)*ct, cy + tr*sp, (R + tr*cp)*st};
+                };
+                auto nm = [&](float th, float ph) -> Vec3 {
+                    float ct = std::cos(th), st = std::sin(th);
+                    float cp = std::cos(ph), sp = std::sin(ph);
+                    return normalize(Vec3{cp*ct, sp, cp*st});
+                };
+                Vec3 p00 = pt(th0,ph0), p10 = pt(th1,ph0), p01 = pt(th0,ph1), p11 = pt(th1,ph1);
+                Vec3 n00 = nm(th0,ph0), n10 = nm(th1,ph0), n01 = nm(th0,ph1), n11 = nm(th1,ph1);
+                float u0 = static_cast<float>(i)/ring_segs, u1 = static_cast<float>(i+1)/ring_segs;
+                float v0 = static_cast<float>(j)/tube_segs, v1 = static_cast<float>(j+1)/tube_segs;
+                tris.push_back({{{p00,n00,{u0,v0}},{p10,n10,{u1,v0}},{p11,n11,{u1,v1}}}});
+                tris.push_back({{{p00,n00,{u0,v0}},{p11,n11,{u1,v1}},{p01,n01,{u0,v1}}}});
+            }
+        }
+    };
+    emit_seam(hh);
+    emit_seam(-hh);
+    return tris;
+}
+
+static std::vector<Triangle> generate_book() {
+    std::vector<Triangle> tris;
+    emit_box_faces(tris, Vec3{0, 0, 0}, 0.35f, 0.5f, 0.075f);
+    return tris;
+}
+
 static std::vector<Triangle> generate_mesh(GeometryType type) {
     switch (type) {
         case GeometryType::Box:      return generate_box();
@@ -649,6 +813,10 @@ static std::vector<Triangle> generate_mesh(GeometryType type) {
         case GeometryType::Bag:      return generate_bag();
         case GeometryType::Card:     return generate_card();
         case GeometryType::Donut:    return generate_donut();
+        case GeometryType::Laptop:   return generate_laptop();
+        case GeometryType::Tablet:   return generate_tablet();
+        case GeometryType::Can:      return generate_can();
+        case GeometryType::Book:     return generate_book();
         case GeometryType::Plane: {
             // Plane UVs: u = x+0.5, v = z+0.5 (maps unit plane to 0-1)
             Vec3 n = {0, 1, 0};

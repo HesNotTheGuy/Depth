@@ -98,6 +98,10 @@ enum class GeometryType : uint8_t {
     Bag,
     Card,
     Donut,  // Easter egg — the classic Blender donut
+    Laptop,
+    Tablet,
+    Can,
+    Book,
 };
 
 /// Result type for operations that can fail

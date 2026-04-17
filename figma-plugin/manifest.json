@@ -1,0 +1,12 @@
+{
+  "name": "Depth - 3D Mockups",
+  "id": "depth-mockups",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["*"],
+    "reasoning": "Loads the Depth web editor in an iframe and fetches exported PNG data."
+  }
+}

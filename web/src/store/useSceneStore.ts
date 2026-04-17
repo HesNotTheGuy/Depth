@@ -1,7 +1,8 @@
 import { create } from 'zustand';
+import { temporal } from 'zundo';
 import type { EstimatedLighting } from '../utils/lightingEstimator';
 
-export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'custom';
+export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'laptop' | 'tablet' | 'can' | 'book' | 'custom';
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp';
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
@@ -196,7 +197,9 @@ const initialState = {
   blendMode: 'normal' as BlendMode,
 };
 
-export const useSceneStore = create<SceneState>((set) => ({
+export const useSceneStore = create<SceneState>()(
+  temporal(
+    (set) => ({
   ...initialState,
 
   setBackgroundImage: (dataUrl) => set({ backgroundImage: dataUrl }),
@@ -330,4 +333,18 @@ export const useSceneStore = create<SceneState>((set) => ({
   setBlendMode: (mode) => set({ blendMode: mode }),
   applyTemplate: (templateState) => set(templateState),
   reset: () => set(initialState),
-}));
+    }),
+    {
+      limit: 50,
+      // Exclude transient/derived fields from history
+      partialize: (state) => {
+        const { selectedFace, estimatedLighting, ...rest } = state;
+        void selectedFace;
+        void estimatedLighting;
+        return rest;
+      },
+      // Avoid recording trivial micro-changes (e.g. slider drags with no net effect)
+      equality: (a, b) => JSON.stringify(a) === JSON.stringify(b),
+    }
+  )
+);

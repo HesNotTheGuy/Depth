@@ -1,6 +1,7 @@
 import { useCallback, useRef } from 'react';
-import { useSceneStore, type ObjectPreset, type Vec3 } from '../../store/useSceneStore';
-import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard } from 'lucide-react';
+import { useSceneStore, type ObjectPreset } from '../../store/useSceneStore';
+import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen } from 'lucide-react';
+import { SliderInput, Vec3SliderInput } from '../ui/SliderInput';
 
 const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'box', label: 'Cube', icon: <Box size={18} /> },
@@ -17,87 +18,11 @@ const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'bag', label: 'Bag', icon: <ShoppingBag size={18} /> },
   { id: 'card', label: 'Card', icon: <CreditCard size={18} /> },
   { id: 'donut', label: 'Donut', icon: <span className="text-base leading-none">🍩</span> },
+  { id: 'laptop', label: 'Laptop', icon: <Laptop size={18} /> },
+  { id: 'tablet', label: 'Tablet', icon: <Tablet size={18} /> },
+  { id: 'can', label: 'Can', icon: <CupSoda size={18} /> },
+  { id: 'book', label: 'Book', icon: <BookOpen size={18} /> },
 ];
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  unit,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  unit?: string;
-}) {
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-[11px] mb-1.5">
-        <span className="text-text-muted font-medium">{label}</span>
-        <span className="text-text-muted tabular-nums font-mono">
-          {value.toFixed(step < 1 ? 2 : 0)}{unit || ''}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full"
-      />
-    </div>
-  );
-}
-
-function Vec3Sliders({
-  label,
-  value,
-  onChange,
-  min = -3,
-  max = 3,
-  step = 0.05,
-}: {
-  label: string;
-  value: Vec3;
-  onChange: (v: Vec3) => void;
-  min?: number;
-  max?: number;
-  step?: number;
-}) {
-  const axes = ['x', 'y', 'z'] as const;
-  const axisColors = ['text-red-400', 'text-green-400', 'text-blue-400'];
-
-  return (
-    <div className="mb-3">
-      <label className="text-[11px] text-text-muted font-medium mb-1.5 block">{label}</label>
-      {axes.map((axis, i) => (
-        <div key={axis} className="flex items-center gap-2 mb-1">
-          <span className={`text-[10px] font-bold uppercase w-3 ${axisColors[i]}`}>{axis}</span>
-          <input
-            type="range"
-            min={min}
-            max={max}
-            step={step}
-            value={value[axis]}
-            onChange={(e) => onChange({ ...value, [axis]: parseFloat(e.target.value) })}
-            className="flex-1"
-          />
-          <span className="text-[10px] text-text-muted tabular-nums font-mono w-10 text-right">
-            {value[axis].toFixed(2)}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function ObjectPanel() {
   const objectType = useSceneStore((s) => s.objectType);
@@ -203,7 +128,7 @@ export function ObjectPanel() {
         onChange={handleObjUpload}
       />
 
-      <Slider
+      <SliderInput
         label="Scale"
         value={scale}
         min={0.1}
@@ -213,8 +138,8 @@ export function ObjectPanel() {
         unit="x"
       />
 
-      <Vec3Sliders label="Position" value={position} onChange={setPosition} />
-      <Vec3Sliders
+      <Vec3SliderInput label="Position" value={position} onChange={setPosition} />
+      <Vec3SliderInput
         label="Rotation"
         value={rotation}
         onChange={setRotation}

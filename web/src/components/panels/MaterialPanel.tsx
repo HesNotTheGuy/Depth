@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { Image, Upload, X, RotateCcw, MousePointerClick, Layers } from 'lucide-react';
 import { useSceneStore, type FaceTextureConfig } from '../../store/useSceneStore';
+import { SliderInput } from '../ui/SliderInput';
 
 type MatPreset = 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
 
@@ -41,21 +42,17 @@ function SliderRow({
   displayValue?: string;
 }) {
   return (
-    <div className="flex items-center gap-2.5">
-      <span className="text-[10px] text-text-muted w-20 shrink-0">{label}</span>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="flex-1"
-      />
-      <span className="text-[10px] text-text-muted w-8 text-right tabular-nums font-mono">
-        {displayValue ?? value.toFixed(2)}
-      </span>
-    </div>
+    <SliderInput
+      layout="inline"
+      label={label}
+      labelWidth="w-20"
+      value={value}
+      onChange={onChange}
+      min={min}
+      max={max}
+      step={step}
+      displayValue={displayValue}
+    />
   );
 }
 

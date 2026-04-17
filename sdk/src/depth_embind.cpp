@@ -144,6 +144,10 @@ EMSCRIPTEN_BINDINGS(depth_module) {
         .value("Bag",      GeometryType::Bag)
         .value("Card",     GeometryType::Card)
         .value("Donut",    GeometryType::Donut)
+        .value("Laptop",   GeometryType::Laptop)
+        .value("Tablet",   GeometryType::Tablet)
+        .value("Can",      GeometryType::Can)
+        .value("Book",     GeometryType::Book)
         ;
 
     /* Material preset enum */

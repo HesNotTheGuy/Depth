@@ -1,6 +1,8 @@
-import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image } from 'lucide-react';
+import { useEffect } from 'react';
+import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image, Undo2, Redo2 } from 'lucide-react';
 import { useUIStore } from '../store/useUIStore';
 import { useSceneStore } from '../store/useSceneStore';
+import { useHistory } from '../hooks/useHistory';
 import { CompositeViewport } from './viewport/CompositeViewport';
 import { ObjectPanel } from './panels/ObjectPanel';
 import { LightingPanel } from './panels/LightingPanel';
@@ -25,6 +27,28 @@ export function Editor() {
   const setSidebarTab = useUIStore((s) => s.setSidebarTab);
   const reset = useSceneStore((s) => s.reset);
   const surfaceCount = useSceneStore((s) => s.surfaces.length);
+  const { undo, redo, canUndo, canRedo } = useHistory();
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (canUndo) undo();
+      } else if ((key === 'z' && e.shiftKey) || key === 'y') {
+        e.preventDefault();
+        if (canRedo) redo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [undo, redo, canUndo, canRedo]);
 
   return (
     <div className="flex flex-col h-full bg-surface">
@@ -49,13 +73,31 @@ export function Editor() {
           </div>
         </div>
 
-        <button
-          onClick={() => setSidebarTab('export')}
-          className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-hover hover:brightness-110 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-lg shadow-primary/15"
-        >
-          <Download size={13} />
-          Export
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => undo()}
+            disabled={!canUndo}
+            className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-muted"
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo2 size={15} />
+          </button>
+          <button
+            onClick={() => redo()}
+            disabled={!canRedo}
+            className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-text-primary transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-text-muted"
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo2 size={15} />
+          </button>
+          <button
+            onClick={() => setSidebarTab('export')}
+            className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-hover hover:brightness-110 text-white px-4 py-1.5 rounded-lg text-xs font-semibold transition-all shadow-lg shadow-primary/15 ml-1"
+          >
+            <Download size={13} />
+            Export
+          </button>
+        </div>
       </div>
 
       {/* Main area */}

@@ -1,5 +1,6 @@
 import { useSceneStore, type SceneLight } from '../../store/useSceneStore';
 import { Sparkles, RotateCcw, Plus, X, Eye, EyeOff } from 'lucide-react';
+import { SliderInput } from '../ui/SliderInput';
 
 export function LightingPanel() {
   const brightness = useSceneStore((s) => s.brightness);
@@ -77,7 +78,7 @@ export function LightingPanel() {
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
         Environment
       </label>
-      <SliderControl
+      <SliderInput
         label="Brightness"
         value={brightness}
         min={0}
@@ -85,7 +86,7 @@ export function LightingPanel() {
         step={0.05}
         onChange={(v) => { setBrightness(v); setAutoLighting(false); }}
       />
-      <SliderControl
+      <SliderInput
         label="Direction"
         value={lightAngle}
         min={0}
@@ -94,7 +95,7 @@ export function LightingPanel() {
         onChange={(v) => { setLightAngle(v); setAutoLighting(false); }}
         unit="°"
       />
-      <SliderControl
+      <SliderInput
         label="Height"
         value={lightElevation}
         min={0}
@@ -106,7 +107,7 @@ export function LightingPanel() {
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mt-5 mb-2.5 block">
         Shadows
       </label>
-      <SliderControl
+      <SliderInput
         label="Opacity"
         value={shadowOpacity}
         min={0}
@@ -114,7 +115,7 @@ export function LightingPanel() {
         step={0.05}
         onChange={(v) => { setShadowOpacity(v); setAutoLighting(false); }}
       />
-      <SliderControl
+      <SliderInput
         label="Softness"
         value={shadowSoftness}
         min={0}
@@ -243,92 +244,40 @@ function LightCard({
           className="w-6 h-6 rounded cursor-pointer"
         />
         <div className="flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[9px] text-text-muted w-12">Intensity</span>
-            <input
-              type="range"
-              min={0}
-              max={5}
-              step={0.1}
-              value={light.intensity}
-              onChange={(e) => onUpdate({ intensity: parseFloat(e.target.value) })}
-              className="flex-1"
-            />
-            <span className="text-[9px] text-text-muted w-6 text-right font-mono">
-              {light.intensity.toFixed(1)}
-            </span>
-          </div>
+          <SliderInput
+            layout="inline"
+            label="Intensity"
+            labelWidth="w-12"
+            value={light.intensity}
+            onChange={(v) => onUpdate({ intensity: v })}
+            min={0}
+            max={5}
+            step={0.1}
+            decimals={1}
+          />
         </div>
       </div>
 
       {/* XYZ Position */}
       <div className="space-y-1">
         {(['x', 'y', 'z'] as const).map((axis) => (
-          <div key={axis} className="flex items-center gap-1.5">
-            <span
-              className={`text-[9px] font-bold w-3 text-center ${
-                axis === 'x' ? 'text-red-400' : axis === 'y' ? 'text-green-400' : 'text-blue-400'
-              }`}
-            >
-              {axis.toUpperCase()}
-            </span>
-            <input
-              type="range"
-              min={-10}
-              max={10}
-              step={0.1}
-              value={light.position[axis]}
-              onChange={(e) =>
-                onUpdate({
-                  position: { ...light.position, [axis]: parseFloat(e.target.value) },
-                })
-              }
-              className="flex-1"
-            />
-            <span className="text-[9px] text-text-muted w-8 text-right font-mono tabular-nums">
-              {light.position[axis].toFixed(1)}
-            </span>
-          </div>
+          <SliderInput
+            key={axis}
+            layout="inline"
+            axis={axis}
+            color={axis === 'x' ? 'red' : axis === 'y' ? 'green' : 'blue'}
+            value={light.position[axis]}
+            onChange={(v) =>
+              onUpdate({ position: { ...light.position, [axis]: v } })
+            }
+            min={-10}
+            max={10}
+            step={0.1}
+            decimals={1}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function SliderControl({
-  label,
-  value,
-  min,
-  max,
-  step,
-  onChange,
-  unit,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  unit?: string;
-}) {
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-[11px] mb-1.5">
-        <span className="text-text-muted font-medium">{label}</span>
-        <span className="text-text-muted tabular-nums font-mono">
-          {value.toFixed(step < 1 ? 2 : 0)}{unit || ''}
-        </span>
-      </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
-        className="w-full"
-      />
-    </div>
-  );
-}

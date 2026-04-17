@@ -2,6 +2,34 @@ import * as THREE from 'three';
 import { downloadBlob } from './exportHelpers';
 import type { ExportFormat } from '../store/useSceneStore';
 
+/**
+ * Detect once at module load whether the Depth app is running inside an
+ * embedding host (e.g. the Figma plugin) that wants export bytes via
+ * postMessage instead of a browser download.
+ */
+const isEmbedded =
+  typeof window !== 'undefined' &&
+  window.parent !== window &&
+  new URLSearchParams(window.location.search).get('embed') === 'figma';
+
+/** Post a blob's bytes to the parent window instead of downloading. */
+async function postBlobToParent(
+  blob: Blob,
+  width: number,
+  height: number
+): Promise<void> {
+  const arrayBuffer = await blob.arrayBuffer();
+  window.parent.postMessage(
+    {
+      type: 'depth-export',
+      png: arrayBuffer,
+      width,
+      height,
+    },
+    '*'
+  );
+}
+
 /** Map export format to MIME type */
 function formatToMime(format: ExportFormat): string {
   switch (format) {
@@ -87,6 +115,14 @@ export async function captureComposite(
   const h = Math.round(baseH * scale);
 
   const blob = await captureCanvas(renderer, scene, camera, w, h, format);
+
+  if (isEmbedded) {
+    // Running inside the Figma plugin (or similar host). Hand the PNG bytes
+    // back to the parent frame instead of triggering a download.
+    await postBlobToParent(blob, w, h);
+    return;
+  }
+
   downloadBlob(blob, `${filename}.${format === 'jpeg' ? 'jpg' : format}`);
 }
 

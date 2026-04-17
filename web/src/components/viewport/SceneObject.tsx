@@ -358,6 +358,72 @@ export function SceneObject() {
         return new THREE.BoxGeometry(0.875, 0.5, 0.01);
       }
 
+      case 'laptop': {
+        // Base (keyboard deck) — thin wide box
+        const base = new THREE.BoxGeometry(1.0, 0.05, 0.7);
+        base.translate(0, -0.025, 0);
+        // Screen — tilted back 100deg from base plane (slightly past vertical)
+        const screen = new THREE.BoxGeometry(1.0, 0.6, 0.03);
+        // Position pivot at bottom-back edge of screen, then rotate
+        screen.translate(0, 0.3, -0.015);
+        const tilt = (100 * Math.PI) / 180; // radians, rotate around X so screen tips back
+        screen.rotateX(-tilt);
+        // Move hinge to back edge of base
+        screen.translate(0, 0, -0.35);
+        const merged = mergeGeometries([base, screen], false);
+        if (merged) {
+          merged.computeBoundingBox();
+          const c = new THREE.Vector3();
+          merged.boundingBox!.getCenter(c);
+          merged.translate(-c.x, -c.y, -c.z);
+          return merged;
+        }
+        return base;
+      }
+
+      case 'tablet': {
+        const w = 0.6, h = 0.85, r = 0.03;
+        const shape = new THREE.Shape();
+        shape.moveTo(-w + r, -h);
+        shape.lineTo(w - r, -h);
+        shape.quadraticCurveTo(w, -h, w, -h + r);
+        shape.lineTo(w, h - r);
+        shape.quadraticCurveTo(w, h, w - r, h);
+        shape.lineTo(-w + r, h);
+        shape.quadraticCurveTo(-w, h, -w, h - r);
+        shape.lineTo(-w, -h + r);
+        shape.quadraticCurveTo(-w, -h, -w + r, -h);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2 });
+        geo.rotateX(-Math.PI / 2);
+        geo.computeBoundingBox();
+        const c = new THREE.Vector3();
+        geo.boundingBox!.getCenter(c);
+        geo.translate(-c.x, -c.y, -c.z);
+        return geo;
+      }
+
+      case 'can': {
+        // Body cylinder
+        const body = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 32);
+        // Lid seam — small torus at top
+        const seam = new THREE.TorusGeometry(0.3, 0.012, 8, 32);
+        seam.rotateX(Math.PI / 2);
+        seam.translate(0, 0.4, 0);
+        // Top inset — slightly smaller, recessed cylinder
+        const top = new THREE.CylinderGeometry(0.28, 0.28, 0.02, 32);
+        top.translate(0, 0.4 - 0.015, 0);
+        // Bottom seam
+        const botSeam = new THREE.TorusGeometry(0.3, 0.012, 8, 32);
+        botSeam.rotateX(Math.PI / 2);
+        botSeam.translate(0, -0.4, 0);
+        const merged = mergeGeometries([body, seam, top, botSeam], false);
+        return merged ?? body;
+      }
+
+      case 'book': {
+        return new THREE.BoxGeometry(0.7, 1.0, 0.15);
+      }
+
       case 'donut': {
         // 🍩 The classic Blender donut — an easter egg for 3D beginners
         const R = 0.35, r = 0.15; // torus major/minor radius
@@ -622,6 +688,10 @@ function getObjectHalfHeight(type: string, scale: number): number {
     case 'bag': return 0.5 * scale;
     case 'card': return 0.25 * scale;
     case 'donut': return 0.15 * scale;
+    case 'laptop': return 0.35 * scale;
+    case 'tablet': return 0.85 * scale;
+    case 'can': return 0.4 * scale;
+    case 'book': return 0.5 * scale;
     case 'custom': return 0.5 * scale;
     default: return 0.5 * scale;
   }
