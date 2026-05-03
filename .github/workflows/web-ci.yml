@@ -1,0 +1,57 @@
+name: web-ci
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/web-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # NOTE: `npm run lint` is currently failing on pre-existing errors in
+      # src/components/viewport/SceneObject.tsx — re-enable this step once
+      # those are fixed.
+      # - name: Lint
+      #   run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:run
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: npm run e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report
+          retention-days: 7

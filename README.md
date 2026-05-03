@@ -108,6 +108,14 @@ npm run dev     # development server
 npm run build   # production build
 ```
 
+### Web tests
+
+```bash
+cd web
+npm run test:run      # unit tests
+npm run e2e           # end-to-end tests
+```
+
 ---
 
 ## License
