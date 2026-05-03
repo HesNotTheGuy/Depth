@@ -1,0 +1,37 @@
+appId: com.depth.app
+productName: Depth
+directories:
+  output: release
+  buildResources: build
+files:
+  - "dist/**/*"
+  - "package.json"
+extraResources:
+  - from: "../web/dist"
+    to: "web"
+    filter: ["**/*"]
+  - from: "../sdk/build/depth_sidecar"
+    to: "sidecar/depth_sidecar"
+  - from: "../sdk/build/Release/depth_sidecar.exe"
+    to: "sidecar/depth_sidecar.exe"
+asar: true
+
+win:
+  target:
+    - nsis
+  artifactName: "Depth-${version}-win-${arch}.${ext}"
+
+mac:
+  target:
+    - dmg
+  category: public.app-category.graphics-design
+  # Code signing: stubbed. Set CSC_LINK / CSC_KEY_PASSWORD env vars in CI to enable.
+  identity: null
+  hardenedRuntime: false
+  artifactName: "Depth-${version}-mac-${arch}.${ext}"
+
+linux:
+  target:
+    - AppImage
+  category: Graphics
+  artifactName: "Depth-${version}-linux-${arch}.${ext}"

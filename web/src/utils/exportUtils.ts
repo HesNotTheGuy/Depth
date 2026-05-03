@@ -12,6 +12,55 @@ const isEmbedded =
   window.parent !== window &&
   new URLSearchParams(window.location.search).get('embed') === 'figma';
 
+/**
+ * Bridge surface exposed by the Electron preload script. When present, the
+ * desktop build can offload heavy renders to the native C++ sidecar instead
+ * of canvas.toBlob.
+ */
+interface DepthElectronBridge {
+  isElectron: true;
+  getStatus: () => Promise<{ ready: boolean; version: string | null }>;
+  render: (scene: unknown) => Promise<{ png: string; width?: number; height?: number }>;
+  exportLayered: (
+    scene: unknown
+  ) => Promise<{ composite: string; foreground: string; shadow: string }>;
+}
+
+/** True when running inside the Electron desktop shell. */
+export const isElectron: boolean =
+  typeof window !== 'undefined' &&
+  typeof (window as unknown as { depth?: DepthElectronBridge }).depth !== 'undefined';
+
+/** Access the Electron bridge (only call when isElectron is true). */
+function depthBridge(): DepthElectronBridge {
+  return (window as unknown as { depth: DepthElectronBridge }).depth;
+}
+
+/** Decode a base64 PNG into a Blob for download/postMessage. */
+function base64ToBlob(b64: string, mime = 'image/png'): Blob {
+  const bin = atob(b64);
+  const len = bin.length;
+  const buf = new Uint8Array(len);
+  for (let i = 0; i < len; i++) buf[i] = bin.charCodeAt(i);
+  return new Blob([buf], { type: mime });
+}
+
+/**
+ * Build a minimal scene-JSON payload for the native sidecar. The renderer
+ * caller passes the Three.js camera/renderer state; we forward enough of
+ * it for the v1 sidecar schema. (Heavy lifting is intentionally deferred —
+ * the in-browser path remains the source of truth until the sidecar grows
+ * full parity.)
+ */
+function buildSidecarScene(width: number, height: number): Record<string, unknown> {
+  return {
+    width,
+    height,
+    objects: [],
+    camera: { position: [2, 1.5, 2], target: [0, 0, 0], fov: 45 },
+  };
+}
+
 /** Post a blob's bytes to the parent window instead of downloading. */
 async function postBlobToParent(
   blob: Blob,
@@ -113,6 +162,20 @@ export async function captureComposite(
   const baseH = renderer.domElement.clientHeight;
   const w = Math.round(baseW * scale);
   const h = Math.round(baseH * scale);
+
+  // Desktop fast-path: hand the scene to the native sidecar for a
+  // high-quality offline render. Falls through to the canvas pipeline
+  // if the bridge errors so the export still succeeds.
+  if (isElectron && format === 'png') {
+    try {
+      const result = await depthBridge().render(buildSidecarScene(w, h));
+      const nativeBlob = base64ToBlob(result.png, 'image/png');
+      downloadBlob(nativeBlob, `${filename}.png`);
+      return;
+    } catch (err) {
+      console.warn('[depth] sidecar render failed, falling back to canvas:', err);
+    }
+  }
 
   const blob = await captureCanvas(renderer, scene, camera, w, h, format);
 

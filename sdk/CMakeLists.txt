@@ -27,6 +27,8 @@ file(GLOB_RECURSE DEPTH_SOURCES
 # compiled separately into the depth_wasm executable.
 list(FILTER DEPTH_SOURCES EXCLUDE REGEX ".*depth_c_api\\.cpp$")
 list(FILTER DEPTH_SOURCES EXCLUDE REGEX ".*depth_embind\\.cpp$")
+# Sidecar has its own main(); excluded from the core lib.
+list(FILTER DEPTH_SOURCES EXCLUDE REGEX ".*sidecar/.*\\.cpp$")
 
 # Core library
 add_library(depth ${LIB_TYPE} ${DEPTH_SOURCES})
@@ -128,6 +130,21 @@ if(EMSCRIPTEN)
     message(STATUS "[Depth] Emscripten WASM build enabled")
     if(DEPTH_WASM_EMBIND)
         message(STATUS "[Depth] Embind bindings: ON")
+    endif()
+endif()
+
+# ── depth_sidecar (native JSON-over-stdio bridge for the Electron host) ──
+if(NOT EMSCRIPTEN)
+    add_executable(depth_sidecar src/sidecar/sidecar_main.cpp)
+    target_link_libraries(depth_sidecar PRIVATE depth)
+    target_include_directories(depth_sidecar PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+    )
+    if(MSVC)
+        target_compile_options(depth_sidecar PRIVATE /W4)
+        target_compile_definitions(depth_sidecar PRIVATE _USE_MATH_DEFINES NOMINMAX)
+    else()
+        target_compile_options(depth_sidecar PRIVATE -Wall -Wextra)
     endif()
 endif()
 
