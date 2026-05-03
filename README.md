@@ -112,4 +112,9 @@ npm run build   # production build
 
 ## License
 
-Proprietary. All rights reserved.
+Depth is dual-licensed.
+
+- **[AGPL-3.0](./LICENSE)** for open-source, personal, academic, and AGPL-compatible use.
+- **[Commercial license](./COMMERCIAL.md)** for proprietary embedding, closed-source distribution, or hosted services that cannot meet AGPL requirements.
+
+Forks and contributions are welcome under the AGPL. For commercial inquiries, see [COMMERCIAL.md](./COMMERCIAL.md).
