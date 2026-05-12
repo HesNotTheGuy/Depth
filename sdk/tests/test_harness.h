@@ -22,7 +22,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <sstream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace depth_test {
@@ -86,17 +88,36 @@ inline void report_failure(int& failures, const char* file, int line,
     failures++;
 }
 
+// Stream-based formatter so we can format strings, enums, ints, floats,
+// pointers, etc. uniformly without trying to C-cast them all to long long.
+template <typename T>
+inline std::string to_str(const T& v) {
+    if constexpr (std::is_same_v<std::decay_t<T>, std::string> ||
+                  std::is_same_v<std::decay_t<T>, const char*> ||
+                  std::is_same_v<std::decay_t<T>, char*>) {
+        std::ostringstream oss;
+        oss << '"' << v << '"';
+        return oss.str();
+    } else if constexpr (std::is_enum_v<T>) {
+        std::ostringstream oss;
+        oss << static_cast<std::underlying_type_t<T>>(v);
+        return oss.str();
+    } else if constexpr (std::is_floating_point_v<T>) {
+        char buf[64];
+        std::snprintf(buf, sizeof(buf), "%.6g", static_cast<double>(v));
+        return buf;
+    } else if constexpr (std::is_integral_v<T>) {
+        return std::to_string(static_cast<long long>(v));
+    } else {
+        std::ostringstream oss;
+        oss << v;
+        return oss.str();
+    }
+}
+
 template <typename A, typename B>
 inline std::string fmt_eq(const A& a, const B& b) {
-    char buf[128];
-    if constexpr (std::is_floating_point_v<A> || std::is_floating_point_v<B>) {
-        std::snprintf(buf, sizeof(buf), "got %.6g, expected %.6g",
-                      (double)a, (double)b);
-    } else {
-        std::snprintf(buf, sizeof(buf), "got %lld, expected %lld",
-                      (long long)a, (long long)b);
-    }
-    return buf;
+    return "got " + to_str(a) + ", expected " + to_str(b);
 }
 
 inline std::string fmt_near(double a, double b, double eps) {
