@@ -3,6 +3,7 @@ import { Save, Trash2, Bookmark } from 'lucide-react';
 import { useSceneStore } from '../../store/useSceneStore';
 import { useExportStore } from '../../store/useExportStore';
 import { MAX_SAVED_SCENES, type SavedSceneMeta } from '../../store/scenePersistence';
+import { promptModal, confirmModal } from '../../store/useModalStore';
 
 const THUMB_W = 256;
 const THUMB_H = 144;
@@ -84,12 +85,22 @@ export function SavedScenesPanel() {
 
   const atCapacity = scenes.length >= MAX_SAVED_SCENES;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (atCapacity) {
-      window.alert(`You can save at most ${MAX_SAVED_SCENES} scenes. Delete one first.`);
+      await confirmModal({
+        title: 'Scene limit reached',
+        description: `You can save at most ${MAX_SAVED_SCENES} scenes. Delete one first.`,
+        confirmLabel: 'OK',
+        cancelLabel: '',
+      });
       return;
     }
-    const name = window.prompt('Name this scene:');
+    const name = await promptModal({
+      title: 'Save scene',
+      description: 'Give this scene a name',
+      placeholder: 'Untitled scene',
+      confirmLabel: 'Save',
+    });
     if (!name || !name.trim()) return;
     const thumbnail = captureThumbnail();
     try {
@@ -97,21 +108,37 @@ export function SavedScenesPanel() {
       refresh();
     } catch (err) {
       console.warn('[depth] Saving scene failed.', err);
-      window.alert('Could not save scene. Check the console for details.');
+      await confirmModal({
+        title: 'Save failed',
+        description: 'Could not save scene. Check the console for details.',
+        confirmLabel: 'OK',
+        cancelLabel: '',
+      });
     }
   };
 
-  const handleLoad = (id: string) => {
+  const handleLoad = async (id: string) => {
     const ok = loadScene(id);
     if (!ok) {
-      window.alert('Could not load that scene — it may have been removed.');
+      await confirmModal({
+        title: 'Scene unavailable',
+        description: 'Could not load that scene — it may have been removed.',
+        confirmLabel: 'OK',
+        cancelLabel: '',
+      });
       refresh();
     }
   };
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    if (!window.confirm('Delete this saved scene?')) return;
+    const ok = await confirmModal({
+      title: 'Delete scene?',
+      description: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     deleteScene(id);
     refresh();
   };
@@ -164,7 +191,7 @@ export function SavedScenesPanel() {
                   onClick={(e) => handleDelete(e, s.id)}
                   className="absolute top-1 right-1 w-5 h-5 rounded-md bg-black/60 text-white/80 hover:bg-red-500/80 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
                   title="Delete"
-                  aria-label="Delete scene"
+                  aria-label={`Delete scene ${s.name}`}
                 >
                   <Trash2 size={11} />
                 </button>

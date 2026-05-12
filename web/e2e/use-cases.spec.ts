@@ -17,18 +17,20 @@ import { promises as fs } from 'node:fs';
 /** Build a synthetic gradient PNG inside the page and return raw bytes. */
 async function synthesizeBackgroundPng(page: Page): Promise<Buffer> {
   const arr = await page.evaluate(async () => {
+    const W = 1280;
+    const H = 720;
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 384;
+    canvas.width = W;
+    canvas.height = H;
     const ctx = canvas.getContext('2d')!;
-    const grad = ctx.createLinearGradient(0, 0, 512, 384);
+    const grad = ctx.createLinearGradient(0, 0, W, H);
     grad.addColorStop(0, '#ffeecc');
     grad.addColorStop(1, '#223344');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 384);
+    ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.arc(380, 80, 30, 0, Math.PI * 2);
+    ctx.arc(W * 0.75, H * 0.2, 60, 0, Math.PI * 2);
     ctx.fill();
     const blob: Blob = await new Promise((resolve) =>
       canvas.toBlob((b: Blob | null) => resolve(b!), 'image/png'),
@@ -257,12 +259,9 @@ test.describe('Use cases', () => {
     expect(afterAdd.objects).toHaveLength(2);
     expect(afterAdd.objects.map((o) => o.type).sort()).toEqual(['mug', 'phone']);
 
-    // Delete the mug via store (the per-row trash button isn't a labeled role).
-    const mugId = afterAdd.objects.find((o) => o.type === 'mug')!.id;
-    await page.evaluate((id) => {
-      const w = window as unknown as { __depthStore?: { getState: () => { removeObject: (id: string) => void } } };
-      w.__depthStore?.getState().removeObject(id);
-    }, mugId);
+    // Delete the mug via the per-row Delete button. The button exposes an
+    // accessible name like "Delete Mug 2" — match on /^Delete /i to find it.
+    await page.getByRole('button', { name: /^delete mug/i }).first().click();
 
     await expect.poll(async () => (await readStore(page)).objects.length).toBe(1);
 
@@ -296,12 +295,13 @@ test.describe('Use cases', () => {
     expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     const width = bytes.readUInt32BE(16);
     const height = bytes.readUInt32BE(20);
-    // At 4x we expect a significantly upscaled image. Canvas size depends on
-    // the background image (512×384) so 4x should yield well over 1500px.
-    // We assert >= 1500 here; the spec asks for >= 5000 (4× a ~1280 canvas),
-    // but the test bg is 512px wide, so the proportional lower bound is ~2000.
-    expect(width).toBeGreaterThanOrEqual(1500);
-    expect(height).toBeGreaterThanOrEqual(1000);
+    // Canvas display size is driven by the viewport (Playwright default 1280×720,
+    // minus the 320px sidebar → ~960px-wide display canvas). At 4x the export
+    // should be ~3840px wide. We assert >= 3500 to absorb minor viewport
+    // variance while still proving the 4x multiplier is actually applied
+    // (a 1x export would only be ~960px wide).
+    expect(width).toBeGreaterThanOrEqual(3500);
+    expect(height).toBeGreaterThanOrEqual(2000);
   });
 
   // Persistence shipped in scenePersistence.ts — verify it actually works.

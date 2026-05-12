@@ -116,6 +116,7 @@ export function ObjectPanel() {
                 onClick={(e) => { e.stopPropagation(); setObjectVisible(o.id, !o.visible); }}
                 className="p-1 rounded hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
                 title={o.visible ? 'Hide' : 'Show'}
+                aria-label={`${o.visible ? 'Hide' : 'Show'} ${o.name}`}
               >
                 {o.visible ? <Eye size={12} /> : <EyeOff size={12} />}
               </button>
@@ -123,6 +124,7 @@ export function ObjectPanel() {
                 onClick={(e) => { e.stopPropagation(); duplicateObject(o.id); }}
                 className="p-1 rounded hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
                 title="Duplicate"
+                aria-label={`Duplicate ${o.name}`}
               >
                 <Copy size={12} />
               </button>
@@ -130,6 +132,7 @@ export function ObjectPanel() {
                 onClick={(e) => { e.stopPropagation(); removeObject(o.id); }}
                 className="p-1 rounded hover:bg-white/10 text-text-muted hover:text-red-400 transition-colors"
                 title="Delete"
+                aria-label={`Delete ${o.name}`}
               >
                 <Trash2 size={12} />
               </button>
