@@ -24,15 +24,25 @@ extern "C" {
 #include <stdint.h>
 #include <stddef.h>
 
-/* Export macro */
-#ifdef _WIN32
+/* Export macro
+ *
+ * On Windows, DLL builds need __declspec(dllexport) when compiling the
+ * library and __declspec(dllimport) when consuming it. Static-lib builds
+ * must not use either, otherwise MSVC emits __imp_ symbol references
+ * that don't exist in the .lib. DEPTH_STATIC is defined as a PUBLIC
+ * compile flag on the library target when DEPTH_SHARED_LIBS=OFF, which
+ * propagates to consumers via target_link_libraries(... depth).
+ */
+#if defined(_WIN32) && !defined(DEPTH_STATIC)
     #ifdef DEPTH_BUILDING_DLL
         #define DEPTH_API __declspec(dllexport)
     #else
         #define DEPTH_API __declspec(dllimport)
     #endif
-#else
+#elif defined(__GNUC__) || defined(__clang__)
     #define DEPTH_API __attribute__((visibility("default")))
+#else
+    #define DEPTH_API
 #endif
 
 /* Opaque handles */

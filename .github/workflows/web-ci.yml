@@ -26,11 +26,14 @@ jobs:
           node-version: 20
 
       # Workaround for npm bug #4828: lockfile generated on Windows
-      # is missing the linux-x64 native binding for @tailwindcss/oxide
-      # (and other native deps). `npm install` re-resolves per-platform;
-      # `npm ci` would strictly follow the lockfile and fail.
+      # only records win32 native bindings (e.g. @tailwindcss/oxide-win32-x64-msvc)
+      # so any subsequent install on Linux is missing the linux binding even
+      # with `npm install`. The robust fix is to wipe the lockfile and let CI
+      # rebuild it fresh on Linux.
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: |
+          rm -f package-lock.json
+          npm install --no-audit --no-fund
 
       - name: Type check
         run: npx tsc --noEmit

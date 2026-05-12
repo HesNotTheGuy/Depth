@@ -33,6 +33,17 @@ list(FILTER DEPTH_SOURCES EXCLUDE REGEX ".*sidecar/.*\\.cpp$")
 # Core library
 add_library(depth ${LIB_TYPE} ${DEPTH_SOURCES})
 
+# Visibility / dllexport handling.
+# When built as a static lib, define DEPTH_STATIC publicly so the
+# headers don't emit __declspec(dllimport) for consumers.
+# When built as a shared lib, define DEPTH_BUILDING_DLL privately so
+# the lib's own .cpp files use __declspec(dllexport).
+if(DEPTH_SHARED_LIBS)
+    target_compile_definitions(depth PRIVATE DEPTH_BUILDING_DLL=1)
+else()
+    target_compile_definitions(depth PUBLIC DEPTH_STATIC=1)
+endif()
+
 target_include_directories(depth
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
