@@ -155,6 +155,7 @@ endif()
 
 # Tests (skip for WASM)
 if(DEPTH_BUILD_TESTS AND NOT EMSCRIPTEN)
+    enable_testing()
     add_subdirectory(tests)
 endif()
 
