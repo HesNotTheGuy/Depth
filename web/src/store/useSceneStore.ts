@@ -1,6 +1,21 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage, type PersistStorage, type StorageValue } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import type { EstimatedLighting } from '../utils/lightingEstimator';
+import {
+  CURRENT_SCENE_KEY,
+  SCENE_SCHEMA_VERSION,
+  PERSIST_SIZE_WARN_BYTES,
+  approxByteSize,
+  migrateSceneState,
+  readScenesIndex,
+  readSavedScene,
+  writeSavedScene,
+  deleteSavedScene as deleteSavedSceneEntry,
+  type PersistedSceneState,
+  type SavedScene,
+  type SavedSceneMeta,
+} from './scenePersistence';
 
 export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'laptop' | 'tablet' | 'can' | 'book' | 'custom';
 
@@ -220,6 +235,14 @@ interface SceneState {
 
   applyTemplate: (state: Partial<SceneState> & Record<string, unknown>) => void;
   reset: () => void;
+
+  // Persistence / saved-scene slots
+  isDirty: boolean;
+  markSaved: () => void;
+  saveCurrentScene: (name: string, thumbnail: string) => SavedSceneMeta;
+  loadScene: (id: string) => boolean;
+  deleteScene: (id: string) => void;
+  listSavedScenes: () => SavedSceneMeta[];
 }
 
 const firstDefault = makeDefaultObject('box');
@@ -245,7 +268,95 @@ const initialState = {
   exportFilename: 'depth-export',
   exportFormat: 'png' as ExportFormat,
   blendMode: 'normal' as BlendMode,
+  isDirty: false,
 };
+
+/** Extract the subset of state that gets persisted (matches PersistedSceneState). */
+function extractPersistedState(s: SceneState): PersistedSceneState {
+  return {
+    backgroundImage: s.backgroundImage,
+    objects: s.objects,
+    selectedObjectId: s.selectedObjectId,
+    sceneLights: s.sceneLights,
+    surfaces: s.surfaces,
+    snapToSurface: s.snapToSurface,
+    blendMode: s.blendMode,
+    brightness: s.brightness,
+    lightAngle: s.lightAngle,
+    lightElevation: s.lightElevation,
+    lightColor: s.lightColor,
+    shadowOpacity: s.shadowOpacity,
+    shadowSoftness: s.shadowSoftness,
+    shadowColor: s.shadowColor,
+    autoLighting: s.autoLighting,
+  };
+}
+
+function defaultPersistedState(): PersistedSceneState {
+  const fresh = makeDefaultObject('box');
+  return {
+    backgroundImage: null,
+    objects: [fresh],
+    selectedObjectId: fresh.id,
+    sceneLights: [],
+    surfaces: [],
+    snapToSurface: true,
+    blendMode: 'normal',
+    brightness: 1.0,
+    lightAngle: 45,
+    lightElevation: 0.6,
+    lightColor: '#ffffff',
+    shadowOpacity: 0.5,
+    shadowSoftness: 0.5,
+    shadowColor: '#000000',
+    autoLighting: true,
+  };
+}
+
+/**
+ * Custom persist storage. Wraps localStorage so we can:
+ *  - Detect quota errors and retry without the (heavy) backgroundImage.
+ *  - Warn when the serialized size grows past ~4 MB.
+ */
+function makeSceneStorage(): PersistStorage<PersistedSceneState> | undefined {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return undefined;
+  }
+  const jsonStorage = createJSONStorage<PersistedSceneState>(() => window.localStorage);
+  if (!jsonStorage) return undefined;
+
+  return {
+    getItem: (name) => jsonStorage.getItem(name),
+    removeItem: (name) => jsonStorage.removeItem(name),
+    setItem: (name, value: StorageValue<PersistedSceneState>) => {
+      const size = approxByteSize(value);
+      if (size > PERSIST_SIZE_WARN_BYTES) {
+        console.warn(
+          `[depth] Persisted scene is ${(size / 1024 / 1024).toFixed(2)} MB — close to localStorage quota.`,
+        );
+      }
+      try {
+        return jsonStorage.setItem(name, value);
+      } catch (err) {
+        // Quota exceeded — retry without the heavy backgroundImage.
+        if (value && value.state && value.state.backgroundImage) {
+          console.warn('[depth] localStorage quota exceeded; persisting without background image.', err);
+          const fallback: StorageValue<PersistedSceneState> = {
+            ...value,
+            state: { ...value.state, backgroundImage: null },
+          };
+          try {
+            return jsonStorage.setItem(name, fallback);
+          } catch (err2) {
+            console.warn('[depth] localStorage persistence failed even without background image.', err2);
+            return;
+          }
+        }
+        console.warn('[depth] localStorage persistence failed.', err);
+      }
+    },
+  };
+}
 
 /** Count existing objects of a preset type to build a fresh unique name. */
 function nextName(objects: SceneObjectInstance[], type: ObjectPreset): string {
@@ -293,6 +404,7 @@ function extractLegacyObjectFields(state: Record<string, unknown>): Partial<Scen
 
 export const useSceneStore = create<SceneState>()(
   temporal(
+    persist(
     (set, get) => ({
       ...initialState,
 
@@ -520,18 +632,111 @@ export const useSceneStore = create<SceneState>()(
           ...initialState,
           objects: [fresh],
           selectedObjectId: fresh.id,
+          isDirty: false,
         });
       },
+
+      // ── Persistence / saved-scene slots ────────────────────────────────
+
+      markSaved: () => {
+        resyncCleanBaseline();
+        set({ isDirty: false });
+      },
+
+      saveCurrentScene: (name, thumbnail) => {
+        const id = crypto.randomUUID();
+        const meta: SavedSceneMeta = { id, name, thumbnail, savedAt: Date.now() };
+        const snapshot: SavedScene = {
+          ...meta,
+          version: SCENE_SCHEMA_VERSION,
+          state: extractPersistedState(get()),
+        };
+        writeSavedScene(snapshot);
+        resyncCleanBaseline();
+        set({ isDirty: false });
+        return meta;
+      },
+
+      loadScene: (id) => {
+        const saved = readSavedScene(id);
+        if (!saved) return false;
+        const defaults = defaultPersistedState();
+        const migrated = migrateSceneState(saved.version, saved.state, defaults);
+        // Replace current scene state. Clears transient fields.
+        set({
+          ...migrated,
+          selectedFace: null,
+          estimatedLighting: null,
+          isDirty: false,
+        });
+        // The subscribe handler may have re-flipped isDirty above; reset baseline
+        // to the just-loaded state and clear the flag again.
+        resyncCleanBaseline();
+        set({ isDirty: false });
+        // Loading a scene shouldn't be part of undo history — clear temporal.
+        try {
+          useSceneStore.temporal.getState().clear();
+        } catch {
+          // Temporal may not be initialized in some test contexts; safe to ignore.
+        }
+        return true;
+      },
+
+      deleteScene: (id) => {
+        deleteSavedSceneEntry(id);
+      },
+
+      listSavedScenes: () => readScenesIndex(),
     }),
+    {
+      name: CURRENT_SCENE_KEY,
+      version: SCENE_SCHEMA_VERSION,
+      storage: makeSceneStorage(),
+      partialize: (state): PersistedSceneState => extractPersistedState(state as SceneState),
+      migrate: (persistedState, version) => {
+        const defaults = defaultPersistedState();
+        return migrateSceneState(version, persistedState, defaults) as unknown as SceneState;
+      },
+    },
+    ),
     {
       limit: 50,
       partialize: (state) => {
-        const { selectedFace, estimatedLighting, ...rest } = state;
+        const { selectedFace, estimatedLighting, isDirty, ...rest } = state;
         void selectedFace;
         void estimatedLighting;
+        void isDirty;
         return rest;
       },
       equality: (a, b) => JSON.stringify(a) === JSON.stringify(b),
     }
   )
 );
+
+// Mark scene as dirty on any state change that affects persisted fields.
+// Subscribing here keeps the isDirty flag accurate without sprinkling
+// `isDirty: true` into every action.
+let lastPersistedSnapshot: string = JSON.stringify(
+  extractPersistedState(useSceneStore.getState()),
+);
+/** Resync the dirty-tracking baseline. Called when state is intentionally
+ *  marked clean (save / load), so the immediately-following subscribe fire
+ *  does not re-flip isDirty back to true. */
+function resyncCleanBaseline() {
+  lastPersistedSnapshot = JSON.stringify(extractPersistedState(useSceneStore.getState()));
+}
+useSceneStore.subscribe((state) => {
+  const serialized = JSON.stringify(extractPersistedState(state));
+  if (serialized === lastPersistedSnapshot) return;
+  lastPersistedSnapshot = serialized;
+  if (!state.isDirty) {
+    useSceneStore.setState({ isDirty: true });
+  }
+});
+
+
+// Expose store on window in dev / E2E builds so Playwright tests can inspect
+// and drive scene state without scraping the DOM. No-op in production builds.
+if (import.meta.env.DEV) {
+  (window as unknown as { __depthStore?: typeof useSceneStore }).__depthStore = useSceneStore;
+}

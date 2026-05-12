@@ -1,4 +1,4 @@
-import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image, Undo2, Redo2, Keyboard } from 'lucide-react';
+import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image, Undo2, Redo2, Keyboard, Bookmark } from 'lucide-react';
 import { useUIStore } from '../store/useUIStore';
 import { useSceneStore } from '../store/useSceneStore';
 import { useHistory } from '../hooks/useHistory';
@@ -10,6 +10,7 @@ import { MaterialPanel } from './panels/MaterialPanel';
 import { SurfacesPanel } from './panels/SurfacesPanel';
 import { TemplatePanel } from './panels/TemplatePanel';
 import { ExportPanel } from './panels/ExportPanel';
+import { SavedScenesPanel } from './panels/SavedScenesPanel';
 import { ShortcutsOverlay } from './ShortcutsOverlay';
 import type { SidebarTab } from '../store/useUIStore';
 
@@ -19,6 +20,7 @@ const tabs: { id: SidebarTab; label: string; icon: React.ReactNode }[] = [
   { id: 'surfaces', label: 'Surfaces', icon: <Layers size={15} /> },
   { id: 'lighting', label: 'Light', icon: <Sun size={15} /> },
   { id: 'material', label: 'Material', icon: <Palette size={15} /> },
+  { id: 'scenes', label: 'Scenes', icon: <Bookmark size={15} /> },
   { id: 'export', label: 'Export', icon: <Image size={15} /> },
 ];
 
@@ -28,6 +30,7 @@ export function Editor() {
   const setSidebarTab = useUIStore((s) => s.setSidebarTab);
   const reset = useSceneStore((s) => s.reset);
   const surfaceCount = useSceneStore((s) => s.surfaces.length);
+  const isDirty = useSceneStore((s) => s.isDirty);
   const { undo, redo, canUndo, canRedo } = useHistory();
   const setShowShortcuts = useUIStore((s) => s.setShowShortcuts);
 
@@ -52,6 +55,18 @@ export function Editor() {
             <Sparkles size={14} className="text-primary" />
             <span className="font-bold text-sm bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent tracking-tight">
               DEPTH
+            </span>
+            <span
+              className={`ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-medium uppercase tracking-wider transition-colors ${
+                isDirty
+                  ? 'bg-amber-500/15 text-amber-400'
+                  : 'bg-emerald-500/15 text-emerald-400'
+              }`}
+              title={isDirty ? 'Unsaved changes' : 'All changes saved'}
+              aria-label={isDirty ? 'Unsaved' : 'Saved'}
+            >
+              <span className={`w-1 h-1 rounded-full ${isDirty ? 'bg-amber-400' : 'bg-emerald-400'}`} />
+              {isDirty ? 'Unsaved' : 'Saved'}
             </span>
           </div>
         </div>
@@ -132,6 +147,7 @@ export function Editor() {
             {sidebarTab === 'surfaces' && <SurfacesPanel />}
             {sidebarTab === 'lighting' && <LightingPanel />}
             {sidebarTab === 'material' && <MaterialPanel />}
+            {sidebarTab === 'scenes' && <SavedScenesPanel />}
             {sidebarTab === 'export' && <ExportPanel />}
           </div>
         </div>

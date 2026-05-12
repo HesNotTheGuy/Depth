@@ -6,55 +6,9 @@ import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance } from '../../store/useSceneStore';
 import { useUIStore } from '../../store/useUIStore';
+import { useHoverStore } from '../../store/useHoverStore';
 import { findSurfaceBelow } from '../../utils/surfaceUtils';
-
-/**
- * Map a BoxGeometry faceIndex (triangle index) to a named face.
- * BoxGeometry generates 6 faces of 2 triangles each, in order:
- * group 0: +X (right), group 1: -X (left), group 2: +Y (top),
- * group 3: -Y (bottom), group 4: +Z (front), group 5: -Z (back)
- */
-const BOX_FACE_NAMES = ['right', 'left', 'top', 'bottom', 'front', 'back'] as const;
-
-function faceIndexToBoxFace(faceIndex: number): string {
-  const groupIndex = Math.floor(faceIndex / 2);
-  return BOX_FACE_NAMES[groupIndex] ?? 'front';
-}
-
-function faceIndexToCylindricalPart(faceIndex: number, geometry: THREE.BufferGeometry): string {
-  const groups = geometry.groups;
-  if (groups.length > 0) {
-    for (const group of groups) {
-      const startTri = group.start / 3;
-      const endTri = startTri + group.count / 3;
-      if (faceIndex >= startTri && faceIndex < endTri) {
-        return `group_${group.materialIndex}`;
-      }
-    }
-  }
-  const index = geometry.index;
-  const totalTriangles = index ? index.count / 3 : 0;
-  if (totalTriangles > 0 && faceIndex >= totalTriangles - 64) {
-    return faceIndex >= totalTriangles - 32 ? 'bottom' : 'top';
-  }
-  return 'body';
-}
-
-function detectFace(objectType: string, faceIndex: number, geometry: THREE.BufferGeometry): string {
-  switch (objectType) {
-    case 'box':
-    case 'card':
-      return faceIndexToBoxFace(faceIndex);
-    case 'phone':
-      return faceIndex < 2 ? 'front' : faceIndex < 4 ? 'back' : 'sides';
-    case 'mug':
-    case 'bottle':
-    case 'cylinder':
-      return faceIndexToCylindricalPart(faceIndex, geometry);
-    default:
-      return 'all';
-  }
-}
+import { BOX_FACE_NAMES, detectFace } from './faceDetection';
 
 function ensureBoxGroups(geometry: THREE.BufferGeometry): void {
   if (geometry.groups.length === 6) return;
@@ -500,7 +454,28 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     selectObject(id);
   }, [position, rotation, id, selectObject]);
 
+  const setHover = useHoverStore((s) => s.setLatest);
+
+  // Track latest hover hit for drag-and-drop targeting. Runs on every pointer
+  // move regardless of dragging state so the drop handler can read the most
+  // recent face/object under the cursor.
+  const onPointerHover = useCallback((e: ThreeEvent<PointerEvent>) => {
+    if (geometry && e.faceIndex != null) {
+      const face = detectFace(objectType, e.faceIndex as number, geometry);
+      setHover({ objectId: id, face });
+    }
+  }, [id, objectType, geometry, setHover]);
+
+  const onPointerOut = useCallback(() => {
+    dragging.current = false;
+    // Only clear if we were the latest. Race-free enough — the next mesh's
+    // onPointerHover will overwrite immediately if applicable.
+    const latest = useHoverStore.getState().latest;
+    if (latest?.objectId === id) setHover(null);
+  }, [id, setHover]);
+
   const onPointerMove = useCallback((e: ThreeEvent<PointerEvent>) => {
+    onPointerHover(e);
     if (gizmoDragging.current) return;
     if (!dragging.current) return;
     e.stopPropagation();
@@ -541,7 +516,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
         },
       });
     }
-  }, [camera, size, position, id, updateObject]);
+  }, [camera, size, position, id, updateObject, onPointerHover]);
 
   const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (gizmoDragging.current) return;
@@ -653,7 +628,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
-          onPointerLeave={() => { dragging.current = false; }}
+          onPointerLeave={onPointerOut}
         >
           <primitive object={geometry} attach="geometry" />
           {!useMultiMaterial && (needsPhysical ? (

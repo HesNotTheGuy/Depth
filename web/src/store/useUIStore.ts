@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Point2D } from './useSceneStore';
 
 export type AppStep = 'upload' | 'editor';
-export type SidebarTab = 'templates' | 'object' | 'lighting' | 'material' | 'surfaces' | 'export';
+export type SidebarTab = 'templates' | 'object' | 'lighting' | 'material' | 'surfaces' | 'scenes' | 'export';
 export type GizmoMode = 'translate' | 'rotate' | 'scale';
 
 interface UIState {
@@ -25,6 +25,10 @@ interface UIState {
   // Shortcuts overlay
   showShortcuts: boolean;
 
+  // Color picker / eyedropper (fallback for browsers without EyeDropper API)
+  isPickingColor: boolean;
+  recentColors: string[];
+
   setStep: (step: AppStep) => void;
   setSidebarTab: (tab: SidebarTab) => void;
   setShowExportModal: (show: boolean) => void;
@@ -38,6 +42,8 @@ interface UIState {
   fitToScreen: () => void;
   setGizmoMode: (mode: GizmoMode) => void;
   setShowShortcuts: (show: boolean) => void;
+  setPickingColor: (v: boolean) => void;
+  addRecentColor: (color: string) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -51,6 +57,8 @@ export const useUIStore = create<UIState>((set) => ({
   canvasPan: { x: 0, y: 0 },
   gizmoMode: 'translate',
   showShortcuts: false,
+  isPickingColor: false,
+  recentColors: [],
 
   setStep: (step) => set({ step }),
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
@@ -69,4 +77,11 @@ export const useUIStore = create<UIState>((set) => ({
   fitToScreen: () => set({ canvasZoom: 1, canvasPan: { x: 0, y: 0 } }),
   setGizmoMode: (mode) => set({ gizmoMode: mode }),
   setShowShortcuts: (show) => set({ showShortcuts: show }),
+  setPickingColor: (v) => set({ isPickingColor: v }),
+  addRecentColor: (color) =>
+    set((s) => {
+      const c = color.toLowerCase();
+      const filtered = s.recentColors.filter((rc) => rc.toLowerCase() !== c);
+      return { recentColors: [color, ...filtered].slice(0, 8) };
+    }),
 }));

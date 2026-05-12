@@ -1,6 +1,7 @@
 import { useRef } from 'react';
-import { Image, Upload, X, RotateCcw, MousePointerClick, Layers } from 'lucide-react';
+import { Image, Upload, X, RotateCcw, MousePointerClick, Layers, Pipette } from 'lucide-react';
 import { useSceneStore, type FaceTextureConfig } from '../../store/useSceneStore';
+import { useUIStore } from '../../store/useUIStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
 import { SliderInput } from '../ui/SliderInput';
 
@@ -54,6 +55,11 @@ function SliderRow({
 export function MaterialPanel() {
   const selected = useSelectedObject();
   const updateSelected = useSceneStore((s) => s.updateSelected);
+  const backgroundImage = useSceneStore((s) => s.backgroundImage);
+  const isPickingColor = useUIStore((s) => s.isPickingColor);
+  const setPickingColor = useUIStore((s) => s.setPickingColor);
+  const recentColors = useUIStore((s) => s.recentColors);
+  const addRecentColor = useUIStore((s) => s.addRecentColor);
   const selectedFace = useSceneStore((s) => s.selectedFace);
   const setSelectedFace = useSceneStore((s) => s.setSelectedFace);
   const setFaceTextureForSelected = useSceneStore((s) => s.setFaceTextureForSelected);
@@ -100,6 +106,31 @@ export function MaterialPanel() {
     };
     reader.readAsDataURL(file);
     e.target.value = '';
+  };
+
+  const applyPickedColor = (hex: string) => {
+    updateSelected({ color: hex });
+    addRecentColor(hex);
+  };
+
+  const handleEyedropper = async () => {
+    if (!backgroundImage) return;
+    // Prefer native EyeDropper API (Chrome/Edge 95+).
+    const w = window as unknown as {
+      EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> };
+    };
+    if (w.EyeDropper) {
+      try {
+        const dropper = new w.EyeDropper();
+        const result = await dropper.open();
+        applyPickedColor(result.sRGBHex);
+      } catch {
+        // user cancelled — silently exit
+      }
+      return;
+    }
+    // Fallback: viewport overlay picker
+    setPickingColor(true);
   };
 
   const resetTextureTransform = () => {
@@ -177,7 +208,44 @@ export function MaterialPanel() {
           onChange={(e) => updateSelected({ color: e.target.value })}
           className="flex-1 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
         />
+        <button
+          onClick={handleEyedropper}
+          disabled={!backgroundImage || isPickingColor}
+          title={
+            backgroundImage
+              ? 'Pick color from background image'
+              : 'Upload a background image first'
+          }
+          className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors shrink-0 ${
+            isPickingColor
+              ? 'bg-primary text-white'
+              : 'bg-white/[0.04] border border-white/8 text-text-muted hover:text-primary hover:border-primary/40'
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
+        >
+          <Pipette size={14} />
+        </button>
       </div>
+
+      {recentColors.length > 0 && (
+        <div className="mb-3">
+          <span className="text-[10px] text-text-muted block mb-1.5">Recently picked</span>
+          <div className="flex gap-1.5 flex-wrap">
+            {recentColors.map((rc) => (
+              <button
+                key={rc}
+                onClick={() => updateSelected({ color: rc })}
+                className={`w-6 h-6 rounded-md transition-all hover:scale-110 ${
+                  color.toLowerCase() === rc.toLowerCase()
+                    ? 'ring-2 ring-primary ring-offset-1 ring-offset-surface-raised'
+                    : 'ring-1 ring-white/10 hover:ring-white/25'
+                }`}
+                style={{ backgroundColor: rc }}
+                title={rc}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex gap-1.5 mb-5 flex-wrap">
         {swatches.map((s) => (

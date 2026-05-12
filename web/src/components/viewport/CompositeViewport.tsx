@@ -4,11 +4,17 @@ import { Environment, ContactShadows } from '@react-three/drei';
 import { useSceneStore } from '../../store/useSceneStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useExportStore } from '../../store/useExportStore';
+import { useHoverStore } from '../../store/useHoverStore';
 import { SceneObjects } from './SceneObject';
 import { BackgroundPlane } from './BackgroundPlane';
 import { SceneLights } from './SceneLights';
 import { SurfaceDrawingOverlay } from './SurfaceDrawingOverlay';
 import { Maximize2, Move3d, RotateCcw, Maximize } from 'lucide-react';
+
+/** Face names for which we render real per-face textures (box / card). */
+const BOX_FACE_NAMES = new Set(['right', 'left', 'top', 'bottom', 'front', 'back']);
+const MAX_DROP_BYTES = 5 * 1024 * 1024;
+const DROP_HINT_KEY = 'depth.viewport.dropHintDismissed';
 
 function SceneLighting() {
   const brightness = useSceneStore((s) => s.brightness);
@@ -84,6 +90,8 @@ export function CompositeViewport() {
   const selectedObjectId = useSceneStore((s) => s.selectedObjectId);
   const scale = useSceneStore((s) => s.objects.find((o) => o.id === s.selectedObjectId)?.scale ?? 1);
   const updateObject = useSceneStore((s) => s.updateObject);
+  const selectObject = useSceneStore((s) => s.selectObject);
+  const setFaceTextureForSelected = useSceneStore((s) => s.setFaceTextureForSelected);
   const setScale = useCallback((v: number) => {
     if (selectedObjectId) updateObject(selectedObjectId, { scale: v });
   }, [selectedObjectId, updateObject]);
@@ -96,16 +104,27 @@ export function CompositeViewport() {
   const fitToScreen = useUIStore((s) => s.fitToScreen);
   const gizmoMode = useUIStore((s) => s.gizmoMode);
   const setGizmoMode = useUIStore((s) => s.setGizmoMode);
+  const isPickingColor = useUIStore((s) => s.isPickingColor);
+  const setPickingColor = useUIStore((s) => s.setPickingColor);
+  const addRecentColor = useUIStore((s) => s.addRecentColor);
+  const updateSelected = useSceneStore((s) => s.updateSelected);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const [imageSize, setImageSize] = useState<{ w: number; h: number } | null>(null);
   const isPanning = useRef(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
+  // Drag-and-drop image placement state
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [dropFeedback, setDropFeedback] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [flashTarget, setFlashTarget] = useState(false);
+  const dragDepthRef = useRef(0);
+  const [showDropHint, setShowDropHint] = useState(false);
+  const dropHintShownRef = useRef(false);
+
   // Load image dimensions when background changes
   useEffect(() => {
     if (!backgroundImage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear cached image size when bg removed
       setImageSize(null);
       return;
     }
@@ -210,6 +229,165 @@ export function CompositeViewport() {
     setCanvasPan({ x: 0, y: 0 });
   }, [imageSize, setCanvasZoom, setCanvasPan, fitToScreen]);
 
+  // Auto-dismiss the toast after 2.5s
+  useEffect(() => {
+    if (!dropFeedback) return;
+    const t = setTimeout(() => setDropFeedback(null), 2500);
+    return () => clearTimeout(t);
+  }, [dropFeedback]);
+
+  // Briefly flash the target ring after a successful drop
+  useEffect(() => {
+    if (!flashTarget) return;
+    const t = setTimeout(() => setFlashTarget(false), 500);
+    return () => clearTimeout(t);
+  }, [flashTarget]);
+
+  // One-time keyboard hint on first viewport hover
+  const handleViewportEnter = useCallback(() => {
+    if (dropHintShownRef.current) return;
+    try {
+      if (localStorage.getItem(DROP_HINT_KEY) === '1') {
+        dropHintShownRef.current = true;
+        return;
+      }
+    } catch { /* localStorage unavailable */ }
+    dropHintShownRef.current = true;
+    setShowDropHint(true);
+    setTimeout(() => {
+      setShowDropHint(false);
+      try { localStorage.setItem(DROP_HINT_KEY, '1'); } catch { /* ignore */ }
+    }, 4000);
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDraggingFile(true);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDraggingFile(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDraggingFile(false);
+
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    const file = files[0]; // Multi-file drop: take only the first; ignore the rest.
+    if (!file.type.startsWith('image/')) {
+      setDropFeedback({ message: 'Only image files are supported', type: 'error' });
+      return;
+    }
+    if (file.size > MAX_DROP_BYTES) {
+      setDropFeedback({ message: 'Image too large (max 5 MB)', type: 'error' });
+      return;
+    }
+
+    // Resolve target: most-recent hover, else selected object, else nothing.
+    const hover = useHoverStore.getState().latest;
+    const sceneState = useSceneStore.getState();
+    const targetId = hover?.objectId ?? sceneState.selectedObjectId;
+    if (!targetId) {
+      setDropFeedback({ message: 'Drop on an object or select one first', type: 'error' });
+      return;
+    }
+    const targetObj = sceneState.objects.find((o) => o.id === targetId);
+    if (!targetObj) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      if (typeof dataUrl !== 'string') return;
+
+      // Decide face-texture vs global-texture.
+      // Per-face textures only render for box/card (the multi-material path in
+      // SceneObject). For other shapes we fall back to the global object texture.
+      const face = hover?.face;
+      const shapeSupportsPerFace = targetObj.type === 'box' || targetObj.type === 'card';
+      const isNamedFace = face != null && BOX_FACE_NAMES.has(face);
+
+      if (shapeSupportsPerFace && isNamedFace) {
+        // setFaceTextureForSelected operates on the selected object; ensure that.
+        if (sceneState.selectedObjectId !== targetId) selectObject(targetId);
+        setFaceTextureForSelected(face, dataUrl);
+        setDropFeedback({ message: `Applied image to ${targetObj.name} (${face} face)`, type: 'success' });
+      } else {
+        updateObject(targetId, { texture: dataUrl });
+        const where = face && face !== 'all' ? ` (${face})` : '';
+        setDropFeedback({ message: `Applied image to ${targetObj.name}${where}`, type: 'success' });
+      }
+      setFlashTarget(true);
+    };
+    reader.onerror = () => {
+      setDropFeedback({ message: 'Failed to read image file', type: 'error' });
+    };
+    reader.readAsDataURL(file);
+  }, [selectObject, setFaceTextureForSelected, updateObject]);
+
+  // Reset color-picker canvas cache when the background image changes.
+  useEffect(() => {
+    clearColorPickerCache();
+  }, [backgroundImage]);
+
+  // Escape cancels the eyedropper picking mode.
+  useEffect(() => {
+    if (!isPickingColor) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPickingColor(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isPickingColor, setPickingColor]);
+
+  // Click handler for the fallback overlay: project the screen click back to
+  // background-image coordinates (accounting for zoom/pan/letterboxing) and
+  // sample the pixel via an offscreen canvas.
+  const handlePickerClick = useCallback(async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!backgroundImage || !containerRef.current || !imageSize) {
+      setPickingColor(false);
+      return;
+    }
+    const rect = containerRef.current.getBoundingClientRect();
+    // The inner image-bearing div is centered then translated by canvasPan then scaled.
+    const centerX = rect.left + rect.width / 2 + canvasPan.x;
+    const centerY = rect.top + rect.height / 2 + canvasPan.y;
+    // Screen offset from that center, in screen pixels.
+    const sx = e.clientX - centerX;
+    const sy = e.clientY - centerY;
+    // Undo zoom -> image-space offset from image center.
+    const ix = sx / canvasZoom + imageSize.w / 2;
+    const iy = sy / canvasZoom + imageSize.h / 2;
+    if (ix < 0 || iy < 0 || ix >= imageSize.w || iy >= imageSize.h) {
+      // Outside image bounds: cancel without applying.
+      setPickingColor(false);
+      return;
+    }
+    try {
+      const hex = await pickColorFromImage(backgroundImage, ix, iy);
+      updateSelected({ color: hex });
+      addRecentColor(hex);
+    } catch {
+      // sampling failed — silently exit
+    } finally {
+      setPickingColor(false);
+    }
+  }, [backgroundImage, imageSize, canvasZoom, canvasPan, setPickingColor, updateSelected, addRecentColor]);
+
   const isBlended = blendMode !== 'normal';
 
   // Canvas dimensions: either match image or fill viewport
@@ -227,6 +405,11 @@ export function CompositeViewport() {
       onPointerDown={handleContainerPointerDown}
       onPointerMove={handleContainerPointerMove}
       onPointerUp={handleContainerPointerUp}
+      onPointerEnter={handleViewportEnter}
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
     >
       {/* Checkerboard background to indicate canvas bounds */}
       <div
@@ -329,6 +512,74 @@ export function CompositeViewport() {
           Left drag to move &middot; Right drag to rotate &middot; Ctrl+Scroll to zoom &middot; Scroll to scale
         </div>
       </div>
+
+      {/* Drag-over indicator: inset primary border + centered label */}
+      <div
+        className={`absolute inset-0 pointer-events-none transition-opacity duration-200 ${
+          isDraggingFile ? 'opacity-100' : 'opacity-0'
+        }`}
+        aria-hidden={!isDraggingFile}
+      >
+        <div className="absolute inset-2 border-2 border-dashed border-primary rounded-lg" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="bg-black/70 backdrop-blur-md text-white text-sm font-medium px-4 py-2 rounded-lg border border-primary/60 shadow-lg">
+            Drop image to apply
+          </div>
+        </div>
+      </div>
+
+      {/* Post-drop confirmation flash ring */}
+      <div
+        className={`absolute inset-2 rounded-lg pointer-events-none transition-opacity duration-300 border-2 border-green-400 ${
+          flashTarget ? 'opacity-100' : 'opacity-0'
+        }`}
+        aria-hidden={!flashTarget}
+      />
+
+      {/* Toast feedback */}
+      {dropFeedback && (
+        <div className="absolute bottom-12 left-1/2 -translate-x-1/2 pointer-events-none">
+          <div
+            className={`px-4 py-2 rounded-lg text-xs font-medium backdrop-blur-md border shadow-lg ${
+              dropFeedback.type === 'success'
+                ? 'bg-green-500/20 border-green-400/40 text-green-100'
+                : 'bg-red-500/20 border-red-400/40 text-red-100'
+            }`}
+          >
+            {dropFeedback.message}
+          </div>
+        </div>
+      )}
+
+      {/* Eyedropper fallback overlay: captures the next click for color sampling */}
+      {isPickingColor && (
+        <>
+          <div
+            onClick={handlePickerClick}
+            onContextMenu={(e) => { e.preventDefault(); setPickingColor(false); }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onWheel={(e) => e.stopPropagation()}
+            className="absolute inset-0 z-40"
+            style={{ cursor: 'crosshair' }}
+            role="presentation"
+          />
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none z-50">
+            <div className="bg-black/80 backdrop-blur-md text-white/90 text-[11px] px-3 py-1.5 rounded-lg border border-primary/40 shadow-lg flex items-center gap-2">
+              <Pipette size={12} className="text-primary" />
+              <span>Click anywhere on the background to pick a color. Press Escape to cancel.</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* One-time keyboard / drop hint */}
+      {showDropHint && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 pointer-events-none animate-in fade-in duration-200">
+          <div className="bg-black/70 backdrop-blur-md text-white/90 text-[11px] px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
+            Tip: drag a logo image directly onto an object
+          </div>
+        </div>
+      )}
     </div>
   );
 }
