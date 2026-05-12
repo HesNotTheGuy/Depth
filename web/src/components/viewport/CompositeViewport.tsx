@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useExportStore } from '../../store/useExportStore';
 import { useHoverStore } from '../../store/useHoverStore';
 import { SceneObjects } from './SceneObject';
+import { AlignmentGuides } from './AlignmentGuides';
 import { BackgroundPlane } from './BackgroundPlane';
 import { SceneLights } from './SceneLights';
 import { SurfaceDrawingOverlay } from './SurfaceDrawingOverlay';
@@ -454,6 +455,7 @@ export function CompositeViewport() {
             <SceneLighting />
             <SceneLights />
             <SceneObjects />
+            <AlignmentGuides />
           </Suspense>
           <Suspense fallback={null}>
             <Environment preset="studio" environmentIntensity={0.3} />

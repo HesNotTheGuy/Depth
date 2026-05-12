@@ -25,14 +25,15 @@ jobs:
         with:
           node-version: 20
 
-      # Workaround for npm bug #4828: lockfile generated on Windows
-      # only records win32 native bindings (e.g. @tailwindcss/oxide-win32-x64-msvc)
-      # so any subsequent install on Linux is missing the linux binding even
-      # with `npm install`. The robust fix is to wipe the lockfile and let CI
-      # rebuild it fresh on Linux.
+      # Workaround for npm bug #4828: lockfiles generated on Windows
+      # only record win32 native bindings (e.g. @tailwindcss/oxide-win32-x64-msvc).
+      # We have BOTH a root workspace lockfile and a web/ lockfile from
+      # before the workspace migration; nuke both and let CI rebuild fresh.
+      # npm workspaces install from the repo root.
       - name: Install dependencies
+        working-directory: ${{ github.workspace }}
         run: |
-          rm -f package-lock.json
+          rm -f package-lock.json web/package-lock.json
           npm install --no-audit --no-fund
 
       - name: Type check

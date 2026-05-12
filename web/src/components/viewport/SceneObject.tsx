@@ -4,11 +4,41 @@ import { TransformControls } from '@react-three/drei';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance } from '../../store/useSceneStore';
+import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance, type Vec3 } from '../../store/useSceneStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useHoverStore } from '../../store/useHoverStore';
+import { useAlignmentStore } from '../../store/useAlignmentStore';
 import { findSurfaceBelow } from '../../utils/surfaceUtils';
+import { computeAlignment, thresholdForZoom, type AlignmentInput } from '../../utils/alignmentUtils';
 import { BOX_FACE_NAMES, detectFace } from './faceDetection';
+
+/**
+ * Build a world-space AABB for an object by combining its geometry's local
+ * bounding box with its world transform. Returns null if the geometry has
+ * no bounding box yet.
+ */
+function computeWorldBounds(
+  obj: { position: Vec3; rotation: Vec3; scale: number },
+  geometry: THREE.BufferGeometry | null,
+): { min: Vec3; max: Vec3 } | null {
+  if (!geometry) return null;
+  if (!geometry.boundingBox) geometry.computeBoundingBox();
+  const local = geometry.boundingBox;
+  if (!local) return null;
+  const m = new THREE.Matrix4();
+  const euler = new THREE.Euler(obj.rotation.x, obj.rotation.y, obj.rotation.z);
+  const q = new THREE.Quaternion().setFromEuler(euler);
+  m.compose(
+    new THREE.Vector3(obj.position.x, obj.position.y, obj.position.z),
+    q,
+    new THREE.Vector3(obj.scale, obj.scale, obj.scale),
+  );
+  const worldBox = local.clone().applyMatrix4(m);
+  return {
+    min: { x: worldBox.min.x, y: worldBox.min.y, z: worldBox.min.z },
+    max: { x: worldBox.max.x, y: worldBox.max.y, z: worldBox.max.z },
+  };
+}
 
 function ensureBoxGroups(geometry: THREE.BufferGeometry): void {
   if (geometry.groups.length === 6) return;
@@ -490,37 +520,88 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
           z: dragStart.current.rot.z,
         },
       });
-    } else if (dragButton.current === 1) {
-      const fov = (camera as THREE.PerspectiveCamera).fov;
-      const dist = camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
-      const vFov = (fov * Math.PI) / 180;
-      const worldPerPixel = (2 * Math.tan(vFov / 2) * dist) / size.height;
-      updateObject(id, {
-        position: {
-          x: dragStart.current.pos.x,
-          y: dragStart.current.pos.y,
-          z: dragStart.current.pos.z + dy * worldPerPixel,
-        },
-      });
-    } else {
-      const fov = (camera as THREE.PerspectiveCamera).fov;
-      const dist = camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
-      const vFov = (fov * Math.PI) / 180;
-      const worldPerPixelY = (2 * Math.tan(vFov / 2) * dist) / size.height;
-      const worldPerPixelX = worldPerPixelY;
-      updateObject(id, {
-        position: {
-          x: dragStart.current.pos.x + dx * worldPerPixelX,
-          y: dragStart.current.pos.y - dy * worldPerPixelY,
-          z: dragStart.current.pos.z,
-        },
-      });
+      return;
     }
-  }, [camera, size, position, id, updateObject, onPointerHover]);
+
+    // Translation drags: optionally apply smart alignment / snapping.
+    const fov = (camera as THREE.PerspectiveCamera).fov;
+    const dist = camera.position.distanceTo(new THREE.Vector3(position.x, position.y, position.z));
+    const vFov = (fov * Math.PI) / 180;
+    const worldPerPixel = (2 * Math.tan(vFov / 2) * dist) / size.height;
+
+    let candidatePos: Vec3;
+    if (dragButton.current === 1) {
+      candidatePos = {
+        x: dragStart.current.pos.x,
+        y: dragStart.current.pos.y,
+        z: dragStart.current.pos.z + dy * worldPerPixel,
+      };
+    } else {
+      candidatePos = {
+        x: dragStart.current.pos.x + dx * worldPerPixel,
+        y: dragStart.current.pos.y - dy * worldPerPixel,
+        z: dragStart.current.pos.z,
+      };
+    }
+
+    // Alt bypasses alignment entirely so the user can place freely.
+    const native = e.nativeEvent as PointerEvent | undefined;
+    const altPressed = native?.altKey === true;
+
+    let finalPos = candidatePos;
+    if (!altPressed && geometry) {
+      const draggedWorldBounds = computeWorldBounds(
+        { position: candidatePos, rotation, scale },
+        geometry,
+      );
+      if (draggedWorldBounds) {
+        const sceneState = useSceneStore.getState();
+        const otherObjects: AlignmentInput['otherObjects'] = [];
+        for (const o of sceneState.objects) {
+          if (o.id === id || !o.visible) continue;
+          // Use the primitive shape's geometry for AABB. For 'custom' types
+          // we don't have the loaded OBJ here; fall back to a unit box which
+          // still gives reasonable edge/center alignment behavior.
+          const otherGeo = buildPrimitiveGeometry(o.type) ?? new THREE.BoxGeometry(1, 1, 1);
+          const bounds = computeWorldBounds(
+            { position: o.position, rotation: o.rotation, scale: o.scale },
+            otherGeo,
+          );
+          if (!bounds) continue;
+          otherObjects.push({
+            id: o.id,
+            bounds,
+            centerWorld: {
+              x: (bounds.min.x + bounds.max.x) / 2,
+              y: (bounds.min.y + bounds.max.y) / 2,
+              z: (bounds.min.z + bounds.max.z) / 2,
+            },
+          });
+        }
+
+        const threshold = thresholdForZoom(useUIStore.getState().canvasZoom);
+        const { snappedPos, snaps } = computeAlignment({
+          draggedId: id,
+          draggedBounds: draggedWorldBounds,
+          candidatePos,
+          otherObjects,
+          threshold,
+        });
+        finalPos = snappedPos;
+        useAlignmentStore.getState().setActiveGuides(snaps);
+      }
+    } else {
+      // Alt held or no geometry: ensure stale guides clear immediately.
+      useAlignmentStore.getState().setActiveGuides([]);
+    }
+
+    updateObject(id, { position: finalPos });
+  }, [camera, size, position, rotation, scale, id, geometry, updateObject, onPointerHover]);
 
   const onPointerUp = useCallback((e: ThreeEvent<PointerEvent>) => {
     if (gizmoDragging.current) return;
     dragging.current = false;
+    useAlignmentStore.getState().clearGuides();
     if (dragButton.current === 0 && pointerDownPos.current && geometry) {
       const dx = e.clientX - pointerDownPos.current.x;
       const dy = e.clientY - pointerDownPos.current.y;
