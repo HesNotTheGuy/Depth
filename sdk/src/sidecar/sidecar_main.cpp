@@ -288,34 +288,45 @@ inline std::vector<uint8_t> decode(const std::string& in) {
 // ─────────────────────────── Scene deserialization ───────────────────────────
 namespace {
 
-depth::GeometryType parse_geometry(const std::string& g) {
+/// Lowercase a string for case-insensitive enum lookup. The web client
+/// emits lowercase tags ("box", "matte"); legacy callers may still send
+/// capitalized forms — accept both.
+std::string to_lower(std::string s) {
+    for (auto& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return s;
+}
+
+depth::GeometryType parse_geometry(const std::string& g_in) {
     using G = depth::GeometryType;
-    if (g == "Box") return G::Box;
-    if (g == "Cylinder") return G::Cylinder;
-    if (g == "Sphere") return G::Sphere;
-    if (g == "Cone") return G::Cone;
-    if (g == "Torus") return G::Torus;
-    if (g == "Plane") return G::Plane;
-    if (g == "Mug") return G::Mug;
-    if (g == "Phone") return G::Phone;
-    if (g == "Bottle") return G::Bottle;
-    if (g == "Bag") return G::Bag;
-    if (g == "Card") return G::Card;
-    if (g == "Donut") return G::Donut;
-    if (g == "Laptop") return G::Laptop;
-    if (g == "Tablet") return G::Tablet;
-    if (g == "Can") return G::Can;
-    if (g == "Book") return G::Book;
+    const std::string g = to_lower(g_in);
+    if (g == "box") return G::Box;
+    if (g == "cylinder") return G::Cylinder;
+    if (g == "sphere") return G::Sphere;
+    if (g == "cone") return G::Cone;
+    if (g == "torus") return G::Torus;
+    if (g == "plane") return G::Plane;
+    if (g == "mug") return G::Mug;
+    if (g == "phone") return G::Phone;
+    if (g == "bottle") return G::Bottle;
+    if (g == "bag") return G::Bag;
+    if (g == "card") return G::Card;
+    if (g == "donut") return G::Donut;
+    if (g == "laptop") return G::Laptop;
+    if (g == "tablet") return G::Tablet;
+    if (g == "can") return G::Can;
+    if (g == "book") return G::Book;
+    if (g == "custom") return G::Custom;
     return G::Box;
 }
 
-depth::MaterialPreset parse_preset(const std::string& p) {
+depth::MaterialPreset parse_preset(const std::string& p_in) {
     using M = depth::MaterialPreset;
-    if (p == "Matte") return M::Matte;
-    if (p == "Glossy") return M::Glossy;
-    if (p == "Metallic") return M::Metallic;
-    if (p == "Glass") return M::Glass;
-    if (p == "Plastic") return M::Plastic;
+    const std::string p = to_lower(p_in);
+    if (p == "matte") return M::Matte;
+    if (p == "glossy") return M::Glossy;
+    if (p == "metallic") return M::Metallic;
+    if (p == "glass") return M::Glass;
+    if (p == "plastic") return M::Plastic;
     return M::Matte;
 }
 
@@ -325,6 +336,14 @@ depth::Vec3 parse_vec3(const mini_json::Value* v, depth::Vec3 dflt = {}) {
         static_cast<float>(v->a[0].num_or(dflt.x)),
         static_cast<float>(v->a[1].num_or(dflt.y)),
         static_cast<float>(v->a[2].num_or(dflt.z)),
+    };
+}
+
+depth::Vec2 parse_vec2(const mini_json::Value* v, depth::Vec2 dflt = {}) {
+    if (!v || !v->is_array() || v->a.size() < 2) return dflt;
+    return {
+        static_cast<float>(v->a[0].num_or(dflt.x)),
+        static_cast<float>(v->a[1].num_or(dflt.y)),
     };
 }
 
@@ -344,6 +363,18 @@ struct ParsedScene {
     uint32_t height = 1080;
 };
 
+/// Decode a base64 image (PNG/JPEG bytes) into an Image. Returns empty Image
+/// on failure — caller decides whether that's fatal.
+depth::Image load_b64_image(const std::string& b64) {
+    if (b64.empty()) return {};
+    auto bytes = b64::decode(b64);
+    if (bytes.empty()) return {};
+    depth::Status st = depth::Status::Ok;
+    depth::Image img = depth::Image::load_from_memory(bytes.data(), bytes.size(), &st);
+    if (st != depth::Status::Ok) return {};
+    return img;
+}
+
 ParsedScene scene_from_json(const mini_json::Value& root) {
     ParsedScene out;
     if (!root.is_object()) {
@@ -355,14 +386,8 @@ ParsedScene scene_from_json(const mini_json::Value& root) {
 
     // Background (base64 PNG)
     if (auto* bg = root.find("background"); bg && bg->is_string() && !bg->s.empty()) {
-        auto bytes = b64::decode(bg->s);
-        if (!bytes.empty()) {
-            depth::Status st = depth::Status::Ok;
-            depth::Image img = depth::Image::load_from_memory(bytes.data(), bytes.size(), &st);
-            if (st == depth::Status::Ok && !img.empty()) {
-                out.scene.set_background(std::move(img));
-            }
-        }
+        depth::Image img = load_b64_image(bg->s);
+        if (!img.empty()) out.scene.set_background(std::move(img));
     }
 
     // Camera
@@ -416,11 +441,98 @@ ParsedScene scene_from_json(const mini_json::Value& root) {
                     so.material.metalness = static_cast<float>(m->num_or(so.material.metalness));
                 if (auto* o = mat->find("opacity"))
                     so.material.opacity = static_cast<float>(o->num_or(so.material.opacity));
+                if (auto* t = mat->find("transmission"))
+                    so.material.transmission = static_cast<float>(t->num_or(so.material.transmission));
+                if (auto* i = mat->find("ior"))
+                    so.material.ior = static_cast<float>(i->num_or(so.material.ior));
+                if (auto* c = mat->find("clearcoat"))
+                    so.material.clearcoat = static_cast<float>(c->num_or(so.material.clearcoat));
+                if (auto* r = mat->find("reflectivity"))
+                    so.material.reflectivity = static_cast<float>(r->num_or(so.material.reflectivity));
+
+                // Albedo texture (base64 PNG/JPEG + transform)
+                if (auto* tex = mat->find("texture"); tex && tex->is_object()) {
+                    if (auto* img = tex->find("image"); img && img->is_string() && !img->s.empty()) {
+                        depth::Image loaded = load_b64_image(img->s);
+                        if (!loaded.empty()) {
+                            so.material.texture = std::make_shared<depth::Image>(std::move(loaded));
+                        }
+                    }
+                    so.material.texture_repeat = parse_vec2(tex->find("repeat"), so.material.texture_repeat);
+                    so.material.texture_offset = parse_vec2(tex->find("offset"), so.material.texture_offset);
+                    if (auto* rot = tex->find("rotation"))
+                        so.material.texture_rotation = static_cast<float>(rot->num_or(so.material.texture_rotation));
+                }
             }
+
+            if (auto* mesh = obj.find("mesh"); mesh && mesh->is_string())
+                so.mesh_path = mesh->s;
+
+            // Visibility: skip non-visible objects entirely so the renderer
+            // doesn't need to know about a hidden flag.
+            bool visible = true;
+            if (auto* v = obj.find("visible"); v && v->is_bool()) visible = v->b;
+            if (!visible) continue;
 
             out.scene.add_object(std::move(so));
         }
     }
+
+    // Point lights
+    if (auto* lights = root.find("pointLights"); lights && lights->is_array()) {
+        for (auto& lv : lights->a) {
+            if (!lv.is_object()) continue;
+            bool vis = true;
+            if (auto* v = lv.find("visible"); v && v->is_bool()) vis = v->b;
+            if (!vis) continue;
+            depth::PointLight pl;
+            if (auto* n = lv.find("name"); n && n->is_string()) pl.name = n->s;
+            pl.position = parse_vec3(lv.find("position"), pl.position);
+            pl.color = parse_color(lv.find("color"), pl.color);
+            if (auto* i = lv.find("intensity"))
+                pl.intensity = static_cast<float>(i->num_or(pl.intensity));
+            if (auto* r = lv.find("range"))
+                pl.range = static_cast<float>(r->num_or(pl.range));
+            out.scene.add_point_light(std::move(pl));
+        }
+    }
+
+    // Surfaces (user-drawn quads with derived 3D transforms)
+    if (auto* surfs = root.find("surfaces"); surfs && surfs->is_array()) {
+        for (auto& sv : surfs->a) {
+            if (!sv.is_object()) continue;
+            bool vis = true;
+            if (auto* v = sv.find("visible"); v && v->is_bool()) vis = v->b;
+            if (!vis) continue;
+            depth::SurfacePlane sp;
+            if (auto* corners = sv.find("corners");
+                corners && corners->is_array() && corners->a.size() >= 4) {
+                for (size_t i = 0; i < 4; ++i) {
+                    sp.image_corners[i] = parse_vec2(&corners->a[i], sp.image_corners[i]);
+                }
+            }
+            sp.transform.position = parse_vec3(sv.find("position"), sp.transform.position);
+            sp.transform.rotation = parse_vec3(sv.find("rotation"), sp.transform.rotation);
+            if (auto* w = sv.find("width"))
+                sp.width = static_cast<float>(w->num_or(sp.width));
+            if (auto* d = sv.find("depth"))
+                sp.depth = static_cast<float>(d->num_or(sp.depth));
+            sp.active = true;
+            out.scene.add_surface(std::move(sp));
+        }
+    }
+
+    // Shadow block
+    if (auto* sh = root.find("shadow"); sh && sh->is_object()) {
+        if (auto* o = sh->find("opacity"))
+            out.scene.set_shadow_opacity(static_cast<float>(o->num_or(out.scene.shadow_opacity())));
+        if (auto* s = sh->find("softness"))
+            out.scene.set_shadow_softness(static_cast<float>(s->num_or(out.scene.shadow_softness())));
+        out.scene.set_shadow_color(parse_color(sh->find("color"), out.scene.shadow_color()));
+    }
+
+    // blendMode and estimatedLighting are accepted but not yet consumed by
+    // the native compositor; reserved for future passes.
 
     return out;
 }

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { downloadBlob } from './exportHelpers';
-import type { ExportFormat } from '../store/useSceneStore';
+import { useSceneStore, type ExportFormat } from '../store/useSceneStore';
+import { buildSidecarScene, type SerializableSceneState } from './sceneSerializer';
 
 /**
  * Detect once at module load whether the Depth app is running inside an
@@ -46,19 +47,52 @@ function base64ToBlob(b64: string, mime = 'image/png'): Blob {
 }
 
 /**
- * Build a minimal scene-JSON payload for the native sidecar. The renderer
- * caller passes the Three.js camera/renderer state; we forward enough of
- * it for the v1 sidecar schema. (Heavy lifting is intentionally deferred —
- * the in-browser path remains the source of truth until the sidecar grows
- * full parity.)
+ * Snapshot the current store state and the live Three.js camera into a
+ * sidecar-ready JSON payload. Pure-ish: reads the Zustand store and the
+ * camera, but performs no IO.
  */
-function buildSidecarScene(width: number, height: number): Record<string, unknown> {
-  return {
+function captureSidecarScene(
+  camera: THREE.Camera,
+  width: number,
+  height: number
+): Record<string, unknown> {
+  const s = useSceneStore.getState();
+  const state: SerializableSceneState = {
+    backgroundImage: s.backgroundImage,
+    estimatedLighting: s.estimatedLighting,
+    objects: s.objects,
+    sceneLights: s.sceneLights,
+    surfaces: s.surfaces,
+    blendMode: s.blendMode,
+    brightness: s.brightness,
+    lightAngle: s.lightAngle,
+    lightElevation: s.lightElevation,
+    lightColor: s.lightColor,
+    shadowOpacity: s.shadowOpacity,
+    shadowSoftness: s.shadowSoftness,
+    shadowColor: s.shadowColor,
+  };
+
+  const camPos = new THREE.Vector3();
+  camera.getWorldPosition(camPos);
+  const camTarget = new THREE.Vector3(0, 0, 0);
+  // OrbitControls keeps target separate; the camera's forward gives us a
+  // reasonable fallback even when controls aren't in scope here.
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  camTarget.copy(camPos).add(dir.multiplyScalar(camPos.length() || 1));
+
+  const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : 45;
+
+  return buildSidecarScene(state, {
     width,
     height,
-    objects: [],
-    camera: { position: [2, 1.5, 2], target: [0, 0, 0], fov: 45 },
-  };
+    camera: {
+      position: [camPos.x, camPos.y, camPos.z],
+      target: [camTarget.x, camTarget.y, camTarget.z],
+      fov,
+    },
+  });
 }
 
 /** Post a blob's bytes to the parent window instead of downloading. */
@@ -168,7 +202,7 @@ export async function captureComposite(
   // if the bridge errors so the export still succeeds.
   if (isElectron && format === 'png') {
     try {
-      const result = await depthBridge().render(buildSidecarScene(w, h));
+      const result = await depthBridge().render(captureSidecarScene(camera, w, h));
       const nativeBlob = base64ToBlob(result.png, 'image/png');
       downloadBlob(nativeBlob, `${filename}.png`);
       return;
