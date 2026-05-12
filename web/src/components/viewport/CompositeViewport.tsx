@@ -104,7 +104,11 @@ export function CompositeViewport() {
 
   // Load image dimensions when background changes
   useEffect(() => {
-    if (!backgroundImage) { setImageSize(null); return; }
+    if (!backgroundImage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear cached image size when bg removed
+      setImageSize(null);
+      return;
+    }
     const img = new Image();
     img.onload = () => {
       setImageSize({ w: img.width, h: img.height });
@@ -119,7 +123,7 @@ export function CompositeViewport() {
       }
     };
     img.src = backgroundImage;
-  }, [backgroundImage]);
+  }, [backgroundImage, setCanvasPan, setCanvasZoom]);
 
   // Keyboard shortcuts for gizmo mode (W/E/R)
   useEffect(() => {

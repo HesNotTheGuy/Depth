@@ -67,6 +67,7 @@ export function SliderInput({
 
   // Keep local input text in sync with external value when not actively editing.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync local input text from prop when not editing
     if (!editing) setText(formatted);
   }, [formatted, editing]);
 

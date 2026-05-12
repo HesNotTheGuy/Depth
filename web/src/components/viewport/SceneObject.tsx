@@ -84,7 +84,11 @@ function useObjModel(url: string | null) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
-    if (!url) { setGeometry(null); return; }
+    if (!url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clearing state when input becomes null is the correct synchronization here
+      setGeometry(null);
+      return;
+    }
     setError(false);
     const loader = new OBJLoader();
     loader.load(
@@ -383,6 +387,9 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     if (!loadedTexture) return;
     loadedTexture.repeat.set(textureRepeat.x, textureRepeat.y);
     loadedTexture.offset.set(textureOffset.x, textureOffset.y);
+    // Three.js textures are external mutable resources, not React state values.
+    // We hold them in useState only to trigger re-renders when (re)loaded.
+    // eslint-disable-next-line react-hooks/immutability
     loadedTexture.rotation = textureRotation;
     loadedTexture.needsUpdate = true;
     invalidate();
@@ -416,6 +423,9 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
       if (!tex) continue;
       tex.repeat.set(config.repeat.x, config.repeat.y);
       tex.offset.set(config.offset.x, config.offset.y);
+      // Three.js textures are external mutable resources; held in state only
+      // to drive re-renders. Mutating per-face transform fields is by design.
+      // eslint-disable-next-line react-hooks/immutability
       tex.rotation = config.rotation;
       tex.needsUpdate = true;
     }
@@ -623,14 +633,15 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     });
   }, [id, updateObject]);
 
-  if (!geometry || !visible) return null;
-
   // Size of selection outline — uses geometry bounding sphere for a simple cue.
+  // Must be called unconditionally before any early return.
   const selectionRadius = useMemo(() => {
     if (!geometry) return 0.7;
     geometry.computeBoundingSphere();
     return (geometry.boundingSphere?.radius ?? 0.7) * 1.08;
   }, [geometry]);
+
+  if (!geometry || !visible) return null;
 
   return (
     <>

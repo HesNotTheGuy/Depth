@@ -22,6 +22,7 @@ export function BackgroundPlane() {
   // Load texture asynchronously
   useEffect(() => {
     if (!backgroundImage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear texture when input becomes null
       setTexture(null);
       return;
     }

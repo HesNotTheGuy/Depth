@@ -33,11 +33,8 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
-      # NOTE: `npm run lint` is currently failing on pre-existing errors in
-      # src/components/viewport/SceneObject.tsx — re-enable this step once
-      # those are fixed.
-      # - name: Lint
-      #   run: npm run lint
+      - name: Lint
+        run: npm run lint
 
       - name: Unit tests
         run: npm run test:run

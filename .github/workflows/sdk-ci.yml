@@ -1,0 +1,64 @@
+name: SDK CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'sdk/**'
+      - '.github/workflows/sdk-ci.yml'
+  pull_request:
+    paths:
+      - 'sdk/**'
+      - '.github/workflows/sdk-ci.yml'
+
+jobs:
+  build:
+    name: Build & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            cxx_flags: '-Wall -Wextra'
+            sidecar_path: sdk/build/depth_sidecar
+          - os: macos-latest
+            cxx_flags: '-Wall -Wextra'
+            sidecar_path: sdk/build/depth_sidecar
+          - os: windows-latest
+            cxx_flags: '/W4'
+            sidecar_path: sdk/build/Release/depth_sidecar.exe
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Cache CMake build directory
+        uses: actions/cache@v4
+        with:
+          path: sdk/build
+          key: ${{ runner.os }}-sdk-build-${{ hashFiles('sdk/CMakeLists.txt', 'sdk/**/*.cpp', 'sdk/**/*.h') }}
+          restore-keys: |
+            ${{ runner.os }}-sdk-build-
+
+      - name: Configure
+        run: cmake -S sdk -B sdk/build -DCMAKE_BUILD_TYPE=Release -DDEPTH_BUILD_TESTS=ON -DCMAKE_CXX_FLAGS_INIT="${{ matrix.cxx_flags }}"
+
+      - name: Build (all)
+        run: cmake --build sdk/build --config Release --parallel
+
+      - name: Build sidecar explicitly
+        run: cmake --build sdk/build --target depth_sidecar --config Release
+
+      - name: Test
+        run: ctest --test-dir sdk/build --output-on-failure -C Release --no-tests=ignore
+
+      - name: Upload sidecar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: depth-sidecar-${{ matrix.os }}
+          path: ${{ matrix.sidecar_path }}
+          if-no-files-found: warn
