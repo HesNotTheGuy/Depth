@@ -157,6 +157,37 @@ describe('useSceneStore', () => {
     expect(o.texture).toBe('data:image/png;base64,USER');
   });
 
+  it('new objects ship with drop shadow disabled and default values', () => {
+    const id = useSceneStore.getState().addObject('sphere');
+    const o = useSceneStore.getState().objects.find((x) => x.id === id)!;
+    expect(o.dropShadow).toBeDefined();
+    expect(o.dropShadow.enabled).toBe(false);
+    expect(o.dropShadow.opacity).toBeCloseTo(0.3);
+    expect(o.dropShadow.blur).toBe(8);
+    expect(o.dropShadow.offsetX).toBe(0);
+    expect(o.dropShadow.offsetZ).toBe(0);
+    expect(o.dropShadow.color).toBe('#000000');
+  });
+
+  it('setDropShadow / setFloorReflection patch their respective slices', () => {
+    const id = useSceneStore.getState().objects[0].id;
+    useSceneStore.getState().setDropShadow(id, { enabled: true, opacity: 0.7, color: '#112233' });
+    const o = useSceneStore.getState().objects.find((x) => x.id === id)!;
+    expect(o.dropShadow.enabled).toBe(true);
+    expect(o.dropShadow.opacity).toBeCloseTo(0.7);
+    expect(o.dropShadow.color).toBe('#112233');
+    // Untouched fields keep their defaults.
+    expect(o.dropShadow.blur).toBe(8);
+
+    expect(useSceneStore.getState().floorReflection.enabled).toBe(false);
+    useSceneStore.getState().setFloorReflection({ enabled: true, intensity: 0.6, resolution: 1024 });
+    const fr = useSceneStore.getState().floorReflection;
+    expect(fr.enabled).toBe(true);
+    expect(fr.intensity).toBeCloseTo(0.6);
+    expect(fr.resolution).toBe(1024);
+    expect(fr.blur).toBe(200);
+  });
+
   it('temporal redo re-applies after an undo', () => {
     const startCount = useSceneStore.getState().objects.length;
     useSceneStore.getState().addObject('cone');

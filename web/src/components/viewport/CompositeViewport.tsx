@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useCallback, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
-import { Environment, ContactShadows } from '@react-three/drei';
+import { Environment, ContactShadows, MeshReflectorMaterial } from '@react-three/drei';
 import * as THREE from 'three';
 import { useSceneStore } from '../../store/useSceneStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -71,7 +71,38 @@ function SceneLighting() {
         far={4}
         resolution={512}
       />
+      <FloorReflection groundY={shadowY} />
     </>
+  );
+}
+
+/** Glossy mirror floor. Resolution and blur are the main perf knobs: 1024px
+ *  resolution + low blur values can drop frame rate noticeably on integrated
+ *  GPUs because MeshReflectorMaterial renders the scene into an off-screen
+ *  target every frame. We sit the plane fractionally below the contact
+ *  shadow Y so depth-fighting doesn't strobe. */
+function FloorReflection({ groundY }: { groundY: number }) {
+  const floorReflection = useSceneStore((s) => s.floorReflection);
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => { invalidate(); }, [floorReflection, groundY, invalidate]);
+  if (!floorReflection.enabled) return null;
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, groundY - 0.001, 0]}>
+      <planeGeometry args={[20, 20]} />
+      <MeshReflectorMaterial
+        mirror={floorReflection.intensity}
+        blur={[floorReflection.blur, floorReflection.blur]}
+        resolution={floorReflection.resolution}
+        color={floorReflection.color}
+        roughness={floorReflection.roughness}
+        metalness={0.5}
+        mixBlur={1}
+        mixStrength={1}
+        depthScale={0.5}
+        minDepthThreshold={0.4}
+        maxDepthThreshold={1.4}
+      />
+    </mesh>
   );
 }
 

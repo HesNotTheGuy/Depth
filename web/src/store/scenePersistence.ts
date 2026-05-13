@@ -8,12 +8,15 @@
  *    `depth-scene-<id>`, with a small index at `depth-scenes-index`
  *    for quick listing without loading heavy state.
  */
-import type { SceneObjectInstance, SurfacePlane, SceneLight, BlendMode, EnvironmentPreset } from './useSceneStore';
+import type { SceneObjectInstance, SurfacePlane, SceneLight, BlendMode, EnvironmentPreset, FloorReflectionConfig } from './useSceneStore';
+import { DEFAULT_DROP_SHADOW, DEFAULT_FLOOR_REFLECTION } from './useSceneStore';
 
-/** Schema version 2 added HDRI environment fields:
- *  environmentPreset, environmentIntensity, environmentRotation, useEnvironment.
- *  Older saves (v1) get sensible defaults via `migrateSceneState`. */
-export const SCENE_SCHEMA_VERSION = 2;
+/** Schema version history:
+ *  v1 -> v2: HDRI environment fields
+ *    (environmentPreset, environmentIntensity, environmentRotation, useEnvironment).
+ *  v2 -> v3: Per-object `dropShadow` + scene-wide `floorReflection`.
+ *  Older saves are backfilled with defaults via `migrateSceneState`. */
+export const SCENE_SCHEMA_VERSION = 3;
 export const MAX_SAVED_SCENES = 10;
 export const CURRENT_SCENE_KEY = 'depth-current-scene';
 export const SCENES_INDEX_KEY = 'depth-scenes-index';
@@ -41,6 +44,7 @@ export interface PersistedSceneState {
   environmentIntensity: number;
   environmentRotation: number;
   useEnvironment: boolean;
+  floorReflection: FloorReflectionConfig;
 }
 
 export interface SavedSceneMeta {
@@ -66,10 +70,26 @@ export function migrateSceneState(
   defaults: PersistedSceneState,
 ): PersistedSceneState {
   if (state && typeof state === 'object') {
-    // v1 -> v2: HDRI environment fields didn't exist. Spreading defaults first
-    // backfills them; older saves load cleanly with environment turned on.
-    if (version === 1 || version === SCENE_SCHEMA_VERSION) {
-      return { ...defaults, ...(state as Partial<PersistedSceneState>) };
+    // v1 / v2 / v3: spread defaults first to backfill any fields that didn't
+    // exist in older shapes (HDRI env in v2, dropShadow/floorReflection in v3),
+    // then overlay persisted values. Also backfill per-object dropShadow.
+    if (version === 1 || version === 2 || version === SCENE_SCHEMA_VERSION) {
+      const merged: PersistedSceneState = {
+        ...defaults,
+        ...(state as Partial<PersistedSceneState>),
+      };
+      // Backfill per-object dropShadow when loading saves that pre-date v3.
+      if (Array.isArray(merged.objects)) {
+        merged.objects = merged.objects.map((o) => ({
+          ...o,
+          dropShadow: o.dropShadow ?? { ...DEFAULT_DROP_SHADOW },
+        }));
+      }
+      // Backfill scene-wide floorReflection when missing.
+      if (!merged.floorReflection) {
+        merged.floorReflection = { ...DEFAULT_FLOOR_REFLECTION };
+      }
+      return merged;
     }
   }
   // Unknown / older versions: fall back to defaults.

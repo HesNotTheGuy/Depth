@@ -1,4 +1,4 @@
-import { useSceneStore, type SceneLight, type EnvironmentPreset } from '../../store/useSceneStore';
+import { useSceneStore, type SceneLight, type EnvironmentPreset, DEFAULT_DROP_SHADOW } from '../../store/useSceneStore';
 import { Sparkles, RotateCcw, Plus, X, Eye, EyeOff } from 'lucide-react';
 import { SliderInput } from '../ui/SliderInput';
 
@@ -55,6 +55,21 @@ export function LightingPanel() {
   const setEnvironmentPreset = useSceneStore((s) => s.setEnvironmentPreset);
   const setEnvironmentIntensity = useSceneStore((s) => s.setEnvironmentIntensity);
   const setEnvironmentRotation = useSceneStore((s) => s.setEnvironmentRotation);
+
+  // Floor reflection
+  const floorReflection = useSceneStore((s) => s.floorReflection);
+  const setFloorReflection = useSceneStore((s) => s.setFloorReflection);
+
+  // Per-object drop shadow operates on the selected object.
+  const selectedObjectId = useSceneStore((s) => s.selectedObjectId);
+  const selectedObject = useSceneStore((s) =>
+    s.objects.find((o) => o.id === s.selectedObjectId) ?? null,
+  );
+  const dropShadow = selectedObject?.dropShadow ?? DEFAULT_DROP_SHADOW;
+  const setDropShadow = useSceneStore((s) => s.setDropShadow);
+  const updateDropShadow = (updates: Partial<typeof dropShadow>) => {
+    if (selectedObjectId) setDropShadow(selectedObjectId, updates);
+  };
 
   const addSceneLight = useSceneStore((s) => s.addSceneLight);
   const updateSceneLight = useSceneStore((s) => s.updateSceneLight);
@@ -255,6 +270,163 @@ export function LightingPanel() {
           />
         </div>
       </div>
+
+      {/* Per-object drop shadow */}
+      <div className="flex items-center justify-between mt-5 mb-2.5">
+        <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">
+          Drop Shadow (per object)
+        </label>
+        <label className="flex items-center gap-1.5 text-[10px] text-text-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            disabled={!selectedObjectId}
+            checked={dropShadow.enabled}
+            onChange={(e) => updateDropShadow({ enabled: e.target.checked })}
+            className="accent-primary"
+          />
+          Enabled
+        </label>
+      </div>
+      {!selectedObjectId && (
+        <p className="text-[10px] text-text-muted/60 italic mb-3">
+          Select an object to configure its drop shadow.
+        </p>
+      )}
+      {selectedObjectId && dropShadow.enabled && (
+        <>
+          <SliderInput
+            label="Opacity"
+            value={dropShadow.opacity}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => updateDropShadow({ opacity: v })}
+          />
+          <SliderInput
+            label="Blur"
+            value={dropShadow.blur}
+            min={0}
+            max={20}
+            step={0.5}
+            onChange={(v) => updateDropShadow({ blur: v })}
+          />
+          <SliderInput
+            label="Offset X"
+            value={dropShadow.offsetX}
+            min={-2}
+            max={2}
+            step={0.05}
+            onChange={(v) => updateDropShadow({ offsetX: v })}
+          />
+          <SliderInput
+            label="Offset Z"
+            value={dropShadow.offsetZ}
+            min={-2}
+            max={2}
+            step={0.05}
+            onChange={(v) => updateDropShadow({ offsetZ: v })}
+          />
+          <div className="mb-3">
+            <label className="text-[11px] text-text-muted font-medium mb-2 block">Color</label>
+            <div className="flex items-center gap-2.5">
+              <input
+                type="color"
+                value={dropShadow.color}
+                onChange={(e) => updateDropShadow({ color: e.target.value })}
+                className="w-8 h-8 rounded-lg cursor-pointer"
+              />
+              <input
+                type="text"
+                value={dropShadow.color}
+                onChange={(e) => updateDropShadow({ color: e.target.value })}
+                className="flex-1 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Floor reflection */}
+      <div className="flex items-center justify-between mt-5 mb-2.5">
+        <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">
+          Floor Reflection
+        </label>
+        <label className="flex items-center gap-1.5 text-[10px] text-text-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={floorReflection.enabled}
+            onChange={(e) => setFloorReflection({ enabled: e.target.checked })}
+            className="accent-primary"
+          />
+          Enabled
+        </label>
+      </div>
+      {floorReflection.enabled && (
+        <>
+          <SliderInput
+            label="Intensity"
+            value={floorReflection.intensity}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => setFloorReflection({ intensity: v })}
+          />
+          <SliderInput
+            label="Blur"
+            value={floorReflection.blur}
+            min={0}
+            max={1000}
+            step={10}
+            onChange={(v) => setFloorReflection({ blur: v })}
+          />
+          <SliderInput
+            label="Roughness"
+            value={floorReflection.roughness}
+            min={0}
+            max={1}
+            step={0.05}
+            onChange={(v) => setFloorReflection({ roughness: v })}
+          />
+          <div className="mb-3">
+            <label className="text-[11px] text-text-muted font-medium mb-2 block">Resolution</label>
+            <div className="flex items-center gap-1.5">
+              {[256, 512, 1024].map((r) => {
+                const active = floorReflection.resolution === r;
+                return (
+                  <button
+                    key={r}
+                    onClick={() => setFloorReflection({ resolution: r })}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                      active
+                        ? 'bg-primary/15 text-primary ring-1 ring-primary/40'
+                        : 'bg-white/[0.04] text-text-muted hover:bg-white/[0.07]'
+                    }`}
+                  >
+                    {r}px
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div className="mb-3">
+            <label className="text-[11px] text-text-muted font-medium mb-2 block">Tint</label>
+            <div className="flex items-center gap-2.5">
+              <input
+                type="color"
+                value={floorReflection.color}
+                onChange={(e) => setFloorReflection({ color: e.target.value })}
+                className="w-8 h-8 rounded-lg cursor-pointer"
+              />
+              <input
+                type="text"
+                value={floorReflection.color}
+                onChange={(e) => setFloorReflection({ color: e.target.value })}
+                className="flex-1 bg-white/[0.04] border border-white/8 rounded-lg px-2.5 py-1.5 text-xs font-mono text-text-primary focus:outline-none focus:border-primary/40 transition-colors"
+              />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Point lights */}
       <div className="flex items-center justify-between mb-2.5">

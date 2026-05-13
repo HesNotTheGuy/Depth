@@ -1,6 +1,6 @@
 import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useThree, type ThreeEvent } from '@react-three/fiber';
-import { TransformControls } from '@react-three/drei';
+import { TransformControls, ContactShadows } from '@react-three/drei';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -738,13 +738,43 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   );
 }
 
+/** Per-object drop shadow: a small ContactShadows directly under the object,
+ *  separate from the scene-wide contact shadow in CompositeViewport. The
+ *  shadow plane sits at `groundY` (lowest visible surface) and is centered
+ *  under the object plus the user's offset. Blur is mapped from the
+ *  0–20 px UI range to drei's blur units. */
+function ObjectDropShadow({ object, groundY }: { object: SceneObjectInstance; groundY: number }) {
+  const ds = object.dropShadow;
+  if (!ds || !ds.enabled || !object.visible) return null;
+  const { position } = object;
+  return (
+    <ContactShadows
+      position={[position.x + ds.offsetX, groundY + 0.001, position.z + ds.offsetZ]}
+      opacity={ds.opacity}
+      blur={Math.max(0.1, ds.blur / 4)}
+      color={ds.color}
+      scale={Math.max(1.5, object.scale * 2.5)}
+      far={Math.max(1, object.scale * 2)}
+      resolution={256}
+      frames={1}
+    />
+  );
+}
+
 export function SceneObjects() {
   const objects = useSceneStore((s) => s.objects);
   const selectedObjectId = useSceneStore((s) => s.selectedObjectId);
+  const surfaces = useSceneStore((s) => s.surfaces);
+  const groundY = surfaces.length > 0
+    ? Math.min(...surfaces.filter((s) => s.visible).map((s) => s.position.y), 0) - 0.01
+    : -0.01;
   return (
     <>
       {objects.map((obj) => (
         <SceneObjectInstanceMesh key={obj.id} object={obj} isSelected={obj.id === selectedObjectId} />
+      ))}
+      {objects.map((obj) => (
+        <ObjectDropShadow key={`ds-${obj.id}`} object={obj} groundY={groundY} />
       ))}
     </>
   );

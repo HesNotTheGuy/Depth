@@ -112,7 +112,48 @@ export interface SceneObjectInstance {
   textureRotation: number;
   faceTextures: Record<string, FaceTextureConfig>;
   visible: boolean;
+  dropShadow: DropShadowConfig;
 }
+
+/** Per-object drop shadow projected onto the ground plane, separate from
+ *  the scene-wide contact shadow. */
+export interface DropShadowConfig {
+  enabled: boolean;
+  opacity: number;
+  blur: number;
+  offsetX: number;
+  offsetZ: number;
+  color: string;
+}
+
+/** Glossy mirror floor reflection. Higher resolution and lower blur both
+ *  cost frame-time; 512 / 200 is a reasonable default. */
+export interface FloorReflectionConfig {
+  enabled: boolean;
+  intensity: number;
+  blur: number;
+  resolution: number;
+  color: string;
+  roughness: number;
+}
+
+export const DEFAULT_DROP_SHADOW: DropShadowConfig = {
+  enabled: false,
+  opacity: 0.3,
+  blur: 8,
+  offsetX: 0,
+  offsetZ: 0,
+  color: '#000000',
+};
+
+export const DEFAULT_FLOOR_REFLECTION: FloorReflectionConfig = {
+  enabled: false,
+  intensity: 0.3,
+  blur: 200,
+  resolution: 512,
+  color: '#000000',
+  roughness: 0.5,
+};
 
 const PRESET_LABELS: Record<ObjectPreset, string> = {
   box: 'Cube',
@@ -181,6 +222,7 @@ export function makeDefaultObject(type: ObjectPreset, nameSuffix = 1): SceneObje
     textureRotation: 0,
     faceTextures: {},
     visible: true,
+    dropShadow: { ...DEFAULT_DROP_SHADOW },
   };
   if (type === 'donut') {
     // 🍩 Easter egg: pink icing
@@ -228,6 +270,9 @@ interface SceneState {
   shadowColor: string;
   autoLighting: boolean;
 
+  // Floor reflection (glossy mirror floor)
+  floorReflection: FloorReflectionConfig;
+
   // HDRI environment
   environmentPreset: EnvironmentPreset;
   environmentIntensity: number;
@@ -260,6 +305,12 @@ interface SceneState {
   setShadowSoftness: (s: number) => void;
   setShadowColor: (c: string) => void;
   setAutoLighting: (auto: boolean) => void;
+
+  // Per-object drop shadow
+  setDropShadow: (id: string, updates: Partial<DropShadowConfig>) => void;
+
+  // Floor reflection
+  setFloorReflection: (updates: Partial<FloorReflectionConfig>) => void;
 
   // HDRI environment actions
   setEnvironmentPreset: (p: EnvironmentPreset) => void;
@@ -316,6 +367,7 @@ const initialState = {
   environmentIntensity: 0.3,
   environmentRotation: 0,
   useEnvironment: true,
+  floorReflection: { ...DEFAULT_FLOOR_REFLECTION } as FloorReflectionConfig,
   sceneLights: [] as SceneLight[],
   surfaces: [] as SurfacePlane[],
   snapToSurface: true,
@@ -348,6 +400,7 @@ function extractPersistedState(s: SceneState): PersistedSceneState {
     environmentIntensity: s.environmentIntensity,
     environmentRotation: s.environmentRotation,
     useEnvironment: s.useEnvironment,
+    floorReflection: s.floorReflection,
   };
 }
 
@@ -373,6 +426,7 @@ function defaultPersistedState(): PersistedSceneState {
     environmentIntensity: 0.3,
     environmentRotation: 0,
     useEnvironment: true,
+    floorReflection: { ...DEFAULT_FLOOR_REFLECTION },
   };
 }
 
@@ -650,6 +704,19 @@ export const useSceneStore = create<SceneState>()(
       setShadowSoftness: (s) => set({ shadowSoftness: s }),
       setShadowColor: (c) => set({ shadowColor: c }),
       setAutoLighting: (auto) => set({ autoLighting: auto }),
+
+      setDropShadow: (id, updates) => {
+        set((s) => ({
+          objects: s.objects.map((o) =>
+            o.id === id
+              ? { ...o, dropShadow: { ...(o.dropShadow ?? DEFAULT_DROP_SHADOW), ...updates } }
+              : o,
+          ),
+        }));
+      },
+
+      setFloorReflection: (updates) =>
+        set((s) => ({ floorReflection: { ...s.floorReflection, ...updates } })),
 
       setEnvironmentPreset: (p) => {
         // 'softbox' and 'window-light' don't ship as drei HDRIs — we keep the
