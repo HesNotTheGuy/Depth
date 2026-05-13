@@ -128,6 +128,35 @@ describe('useSceneStore', () => {
     expect(useSceneStore.getState().objects.length).toBe(startCount);
   });
 
+  it('library material "wood" applies its defaults and stamps a procedural texture', () => {
+    const id = useSceneStore.getState().objects[0].id;
+    expect(useSceneStore.getState().objects[0].texture).toBeNull();
+    useSceneStore.getState().updateObject(id, { material: 'wood' });
+    const o = useSceneStore.getState().objects[0];
+    expect(o.material).toBe('wood');
+    // Material defaults applied
+    expect(o.roughness).toBeCloseTo(0.7);
+    expect(o.metalness).toBe(0);
+    // Procedural texture auto-applied (canvas fallback in jsdom still yields a data URL)
+    expect(typeof o.texture).toBe('string');
+    expect(o.texture?.startsWith('data:image/')).toBe(true);
+  });
+
+  it('library material "tinted-glass" sets transmission/IOR defaults without overwriting an existing texture', () => {
+    const id = useSceneStore.getState().objects[0].id;
+    // Pre-populate a user texture to verify it's preserved.
+    useSceneStore.getState().updateObject(id, { texture: 'data:image/png;base64,USER' });
+    useSceneStore.getState().updateObject(id, { material: 'tinted-glass' });
+    const o = useSceneStore.getState().objects[0];
+    expect(o.material).toBe('tinted-glass');
+    expect(o.transmission).toBeCloseTo(0.85);
+    expect(o.ior).toBeCloseTo(1.5);
+    expect(o.opacity).toBeCloseTo(0.35);
+    // tinted-glass has no procedural texture generator, and the existing user
+    // texture should not be cleared.
+    expect(o.texture).toBe('data:image/png;base64,USER');
+  });
+
   it('temporal redo re-applies after an undo', () => {
     const startCount = useSceneStore.getState().objects.length;
     useSceneStore.getState().addObject('cone');

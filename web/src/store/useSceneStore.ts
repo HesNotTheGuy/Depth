@@ -3,6 +3,13 @@ import { persist, createJSONStorage, type PersistStorage, type StorageValue } fr
 import { temporal } from 'zundo';
 import type { EstimatedLighting } from '../utils/lightingEstimator';
 import {
+  generateWoodGrainTexture,
+  generateMarbleTexture,
+  generateFabricTexture,
+  generateLeatherTexture,
+  generateBrushedMetalTexture,
+} from '../utils/proceduralTextures';
+import {
   CURRENT_SCENE_KEY,
   SCENE_SCHEMA_VERSION,
   PERSIST_SIZE_WARN_BYTES,
@@ -21,6 +28,22 @@ export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'm
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp';
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
+
+/** Material library presets. The first 5 are "basic" — they only set
+ *  PBR parameters. The latter 6 ("library") additionally stamp a procedural
+ *  texture onto the object the first time they're applied. */
+export type MaterialPreset =
+  | 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic'
+  | 'wood' | 'marble' | 'fabric' | 'leather' | 'brushed-metal' | 'tinted-glass';
+
+/** Curated HDRI environment presets exposed in the lighting panel. The first
+ *  10 map 1:1 to drei's built-in presets; the last 2 ('softbox', 'window-light')
+ *  fall back to drei's 'studio' with different intensity/rotation defaults
+ *  baked in — TODO: ship custom HDRIs for these. */
+export type EnvironmentPreset =
+  | 'studio' | 'sunset' | 'dawn' | 'night' | 'warehouse'
+  | 'forest' | 'apartment' | 'city' | 'park' | 'lobby'
+  | 'softbox' | 'window-light';
 
 export interface Vec3 {
   x: number;
@@ -75,7 +98,7 @@ export interface SceneObjectInstance {
   rotation: Vec3;
   scale: number;
   color: string;
-  material: 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
+  material: MaterialPreset;
   roughness: number;
   metalness: number;
   transmission: number;
@@ -110,12 +133,28 @@ const PRESET_LABELS: Record<ObjectPreset, string> = {
   custom: 'Custom',
 };
 
-const MATERIAL_DEFAULTS: Record<SceneObjectInstance['material'], Partial<SceneObjectInstance>> = {
-  matte:    { roughness: 0.9, metalness: 0, opacity: 1.0 },
-  glossy:   { roughness: 0.1, metalness: 0, opacity: 1.0 },
-  metallic: { roughness: 0.3, metalness: 1.0, opacity: 1.0 },
-  glass:    { roughness: 0.05, metalness: 0, transmission: 1.0, ior: 1.5, opacity: 0.2, reflectivity: 0.5 },
-  plastic:  { roughness: 0.4, metalness: 0, clearcoat: 0.5, opacity: 1.0 },
+const MATERIAL_DEFAULTS: Record<MaterialPreset, Partial<SceneObjectInstance>> = {
+  matte:           { roughness: 0.9, metalness: 0, opacity: 1.0 },
+  glossy:          { roughness: 0.1, metalness: 0, opacity: 1.0 },
+  metallic:        { roughness: 0.3, metalness: 1.0, opacity: 1.0 },
+  glass:           { roughness: 0.05, metalness: 0, transmission: 1.0, ior: 1.5, opacity: 0.2, reflectivity: 0.5 },
+  plastic:         { roughness: 0.4, metalness: 0, clearcoat: 0.5, opacity: 1.0 },
+  // Library presets — pair with a procedural texture applied below.
+  wood:            { roughness: 0.7, metalness: 0,   clearcoat: 0.1, opacity: 1.0, reflectivity: 0.3 },
+  marble:          { roughness: 0.15, metalness: 0,  clearcoat: 0.4, opacity: 1.0, reflectivity: 0.5 },
+  fabric:          { roughness: 0.95, metalness: 0,  clearcoat: 0,   opacity: 1.0, reflectivity: 0.2 },
+  leather:         { roughness: 0.65, metalness: 0,  clearcoat: 0.15, opacity: 1.0, reflectivity: 0.3 },
+  'brushed-metal': { roughness: 0.45, metalness: 1.0, clearcoat: 0.1, opacity: 1.0, reflectivity: 0.6 },
+  'tinted-glass':  { roughness: 0.08, metalness: 0,  transmission: 0.85, ior: 1.5, opacity: 0.35, reflectivity: 0.4, clearcoat: 0.2 },
+};
+
+/** Materials in the "library" group that auto-apply a procedural texture. */
+const LIBRARY_MATERIAL_TEXTURES: Partial<Record<MaterialPreset, () => string>> = {
+  wood: () => generateWoodGrainTexture(256, 256),
+  marble: () => generateMarbleTexture(256, 256),
+  fabric: () => generateFabricTexture(256, 256),
+  leather: () => generateLeatherTexture(256, 256),
+  'brushed-metal': () => generateBrushedMetalTexture(256, 256),
 };
 
 export function makeDefaultObject(type: ObjectPreset, nameSuffix = 1): SceneObjectInstance {
@@ -189,6 +228,12 @@ interface SceneState {
   shadowColor: string;
   autoLighting: boolean;
 
+  // HDRI environment
+  environmentPreset: EnvironmentPreset;
+  environmentIntensity: number;
+  environmentRotation: number;
+  useEnvironment: boolean;
+
   // Actions — global
   setBackgroundImage: (dataUrl: string | null) => void;
   setEstimatedLighting: (lighting: EstimatedLighting | null) => void;
@@ -215,6 +260,12 @@ interface SceneState {
   setShadowSoftness: (s: number) => void;
   setShadowColor: (c: string) => void;
   setAutoLighting: (auto: boolean) => void;
+
+  // HDRI environment actions
+  setEnvironmentPreset: (p: EnvironmentPreset) => void;
+  setEnvironmentIntensity: (v: number) => void;
+  setEnvironmentRotation: (v: number) => void;
+  setUseEnvironment: (v: boolean) => void;
 
   // Scene lights
   addSceneLight: (light: SceneLight) => void;
@@ -261,6 +312,10 @@ const initialState = {
   shadowSoftness: 0.5,
   shadowColor: '#000000',
   autoLighting: true,
+  environmentPreset: 'studio' as EnvironmentPreset,
+  environmentIntensity: 0.3,
+  environmentRotation: 0,
+  useEnvironment: true,
   sceneLights: [] as SceneLight[],
   surfaces: [] as SurfacePlane[],
   snapToSurface: true,
@@ -289,6 +344,10 @@ function extractPersistedState(s: SceneState): PersistedSceneState {
     shadowSoftness: s.shadowSoftness,
     shadowColor: s.shadowColor,
     autoLighting: s.autoLighting,
+    environmentPreset: s.environmentPreset,
+    environmentIntensity: s.environmentIntensity,
+    environmentRotation: s.environmentRotation,
+    useEnvironment: s.useEnvironment,
   };
 }
 
@@ -310,6 +369,10 @@ function defaultPersistedState(): PersistedSceneState {
     shadowSoftness: 0.5,
     shadowColor: '#000000',
     autoLighting: true,
+    environmentPreset: 'studio',
+    environmentIntensity: 0.3,
+    environmentRotation: 0,
+    useEnvironment: true,
   };
 }
 
@@ -488,9 +551,16 @@ export const useSceneStore = create<SceneState>()(
         set((s) => ({
           objects: s.objects.map((o) => {
             if (o.id !== id) return o;
-            // When material changes, apply material preset defaults.
+            // When material changes, apply material preset defaults. Library
+            // materials (wood/marble/...) also stamp a procedural texture
+            // on the object — but only if the object doesn't already have a
+            // user-uploaded texture (we don't want to clobber custom uploads).
             if (updates.material && updates.material !== o.material) {
-              return { ...o, ...MATERIAL_DEFAULTS[updates.material], ...updates };
+              const textureGen = LIBRARY_MATERIAL_TEXTURES[updates.material];
+              const stampTexture = textureGen && !o.texture
+                ? { texture: textureGen() }
+                : {};
+              return { ...o, ...MATERIAL_DEFAULTS[updates.material], ...stampTexture, ...updates };
             }
             // Donut easter-egg: when switching type to donut, apply pink-icing look
             if (updates.type && updates.type !== o.type && updates.type === 'donut') {
@@ -580,6 +650,24 @@ export const useSceneStore = create<SceneState>()(
       setShadowSoftness: (s) => set({ shadowSoftness: s }),
       setShadowColor: (c) => set({ shadowColor: c }),
       setAutoLighting: (auto) => set({ autoLighting: auto }),
+
+      setEnvironmentPreset: (p) => {
+        // 'softbox' and 'window-light' don't ship as drei HDRIs — we keep the
+        // selection in the store and let the viewport map them to 'studio'
+        // with tuned defaults. Bake those defaults here so the user sees the
+        // intensity change immediately.
+        const partial: Partial<SceneState> = { environmentPreset: p };
+        if (p === 'softbox') {
+          partial.environmentIntensity = 1.0;
+        } else if (p === 'window-light') {
+          partial.environmentIntensity = 0.6;
+          partial.environmentRotation = 45;
+        }
+        set(partial);
+      },
+      setEnvironmentIntensity: (v) => set({ environmentIntensity: v }),
+      setEnvironmentRotation: (v) => set({ environmentRotation: v }),
+      setUseEnvironment: (v) => set({ useEnvironment: v }),
 
       addSceneLight: (light) => set((s) => ({ sceneLights: [...s.sceneLights, light] })),
       updateSceneLight: (id, updates) =>

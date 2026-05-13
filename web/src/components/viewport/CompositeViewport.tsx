@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useCallback, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { Environment, ContactShadows } from '@react-three/drei';
+import * as THREE from 'three';
 import { useSceneStore } from '../../store/useSceneStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useExportStore } from '../../store/useExportStore';
@@ -71,6 +72,41 @@ function SceneLighting() {
         resolution={512}
       />
     </>
+  );
+}
+
+/** Drei's <Environment> only supports its built-in preset names. Our store
+ *  exposes 12 curated presets; the last two are stand-ins we render as
+ *  'studio' (with tuned defaults already applied by setEnvironmentPreset). */
+type DreiPreset = 'apartment' | 'city' | 'dawn' | 'forest' | 'lobby' | 'night' | 'park' | 'studio' | 'sunset' | 'warehouse';
+function mapToDreiPreset(p: string): DreiPreset {
+  switch (p) {
+    case 'sunset': case 'dawn': case 'night': case 'warehouse':
+    case 'forest': case 'apartment': case 'city': case 'park':
+    case 'lobby': case 'studio':
+      return p;
+    // TODO: ship custom HDRIs for 'softbox' and 'window-light'.
+    default:
+      return 'studio';
+  }
+}
+
+function HDRIEnvironment() {
+  const useEnvironment = useSceneStore((s) => s.useEnvironment);
+  const environmentPreset = useSceneStore((s) => s.environmentPreset);
+  const environmentIntensity = useSceneStore((s) => s.environmentIntensity);
+  const environmentRotation = useSceneStore((s) => s.environmentRotation);
+  const invalidate = useThree((s) => s.invalidate);
+
+  useEffect(() => { invalidate(); }, [useEnvironment, environmentPreset, environmentIntensity, environmentRotation, invalidate]);
+
+  if (!useEnvironment) return null;
+  return (
+    <Environment
+      preset={mapToDreiPreset(environmentPreset)}
+      environmentIntensity={environmentIntensity}
+      environmentRotation={new THREE.Euler(0, (environmentRotation * Math.PI) / 180, 0)}
+    />
   );
 }
 
@@ -458,7 +494,7 @@ export function CompositeViewport() {
             <AlignmentGuides />
           </Suspense>
           <Suspense fallback={null}>
-            <Environment preset="studio" environmentIntensity={0.3} />
+            <HDRIEnvironment />
           </Suspense>
         </Canvas>
 

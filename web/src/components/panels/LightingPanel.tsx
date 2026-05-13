@@ -1,6 +1,28 @@
-import { useSceneStore, type SceneLight } from '../../store/useSceneStore';
+import { useSceneStore, type SceneLight, type EnvironmentPreset } from '../../store/useSceneStore';
 import { Sparkles, RotateCcw, Plus, X, Eye, EyeOff } from 'lucide-react';
 import { SliderInput } from '../ui/SliderInput';
+
+interface EnvOption {
+  id: EnvironmentPreset;
+  label: string;
+  /** CSS gradient used as the thumbnail. Hand-picked to evoke the HDRI mood. */
+  gradient: string;
+}
+
+const ENV_OPTIONS: EnvOption[] = [
+  { id: 'studio',       label: 'Studio',    gradient: 'linear-gradient(135deg,#f5f5f5,#cfcfcf)' },
+  { id: 'sunset',       label: 'Sunset',    gradient: 'linear-gradient(135deg,#ffb37a,#ff6e9c)' },
+  { id: 'dawn',         label: 'Dawn',      gradient: 'linear-gradient(135deg,#9ec5ff,#5a7bc1)' },
+  { id: 'night',        label: 'Night',     gradient: 'linear-gradient(135deg,#16213e,#0a0f1e)' },
+  { id: 'warehouse',    label: 'Warehouse', gradient: 'linear-gradient(135deg,#8c9098,#4a4d52)' },
+  { id: 'forest',       label: 'Forest',    gradient: 'linear-gradient(135deg,#3f8d5b,#1f4a2c)' },
+  { id: 'apartment',    label: 'Apartment', gradient: 'linear-gradient(135deg,#e8d4ad,#a8865c)' },
+  { id: 'city',         label: 'City',      gradient: 'linear-gradient(135deg,#7b8c9e,#3d4a5a)' },
+  { id: 'park',         label: 'Park',      gradient: 'linear-gradient(135deg,#bce2a3,#7cb86f)' },
+  { id: 'lobby',        label: 'Lobby',     gradient: 'linear-gradient(135deg,#f5d98a,#b88a3a)' },
+  { id: 'softbox',      label: 'Softbox',   gradient: 'linear-gradient(135deg,#ffffff,#e0e0e0)' },
+  { id: 'window-light', label: 'Window',    gradient: 'linear-gradient(135deg,#fff3d6,#d8c098)' },
+];
 
 export function LightingPanel() {
   const brightness = useSceneStore((s) => s.brightness);
@@ -23,6 +45,17 @@ export function LightingPanel() {
   const setShadowColor = useSceneStore((s) => s.setShadowColor);
   const setAutoLighting = useSceneStore((s) => s.setAutoLighting);
   const setEstimatedLighting = useSceneStore((s) => s.setEstimatedLighting);
+
+  // HDRI environment
+  const useEnvironment = useSceneStore((s) => s.useEnvironment);
+  const environmentPreset = useSceneStore((s) => s.environmentPreset);
+  const environmentIntensity = useSceneStore((s) => s.environmentIntensity);
+  const environmentRotation = useSceneStore((s) => s.environmentRotation);
+  const setUseEnvironment = useSceneStore((s) => s.setUseEnvironment);
+  const setEnvironmentPreset = useSceneStore((s) => s.setEnvironmentPreset);
+  const setEnvironmentIntensity = useSceneStore((s) => s.setEnvironmentIntensity);
+  const setEnvironmentRotation = useSceneStore((s) => s.setEnvironmentRotation);
+
   const addSceneLight = useSceneStore((s) => s.addSceneLight);
   const updateSceneLight = useSceneStore((s) => s.updateSceneLight);
   const removeSceneLight = useSceneStore((s) => s.removeSceneLight);
@@ -74,9 +107,73 @@ export function LightingPanel() {
         </div>
       )}
 
+      {/* HDRI Environment library */}
+      <div className="flex items-center justify-between mb-2.5">
+        <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest">
+          Environment
+        </label>
+        <label className="flex items-center gap-1.5 text-[10px] text-text-muted cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={useEnvironment}
+            onChange={(e) => setUseEnvironment(e.target.checked)}
+            className="accent-primary"
+          />
+          Use HDRI
+        </label>
+      </div>
+
+      {useEnvironment && (
+        <>
+          <div className="grid grid-cols-3 gap-1.5 mb-3">
+            {ENV_OPTIONS.map((opt) => {
+              const active = environmentPreset === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  onClick={() => setEnvironmentPreset(opt.id)}
+                  title={opt.label}
+                  className={`flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all ${
+                    active
+                      ? 'bg-primary/10 ring-1 ring-primary'
+                      : 'hover:bg-white/[0.03] ring-1 ring-transparent'
+                  }`}
+                >
+                  <div
+                    className="w-full aspect-square rounded-md border border-white/10"
+                    style={{ background: opt.gradient }}
+                    aria-hidden
+                  />
+                  <span className={`text-[9px] leading-tight text-center ${active ? 'text-primary' : 'text-text-muted'}`}>
+                    {opt.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <SliderInput
+            label="Intensity"
+            value={environmentIntensity}
+            min={0}
+            max={2}
+            step={0.05}
+            onChange={(v) => setEnvironmentIntensity(v)}
+          />
+          <SliderInput
+            label="Rotation"
+            value={environmentRotation}
+            min={0}
+            max={360}
+            step={1}
+            onChange={(v) => setEnvironmentRotation(v)}
+            unit="°"
+          />
+        </>
+      )}
+
       {/* Global ambient/directional controls */}
-      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
-        Environment
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mt-5 mb-2.5 block">
+        Global Lighting
       </label>
       <SliderInput
         label="Brightness"

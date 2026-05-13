@@ -8,9 +8,12 @@
  *    `depth-scene-<id>`, with a small index at `depth-scenes-index`
  *    for quick listing without loading heavy state.
  */
-import type { SceneObjectInstance, SurfacePlane, SceneLight, BlendMode } from './useSceneStore';
+import type { SceneObjectInstance, SurfacePlane, SceneLight, BlendMode, EnvironmentPreset } from './useSceneStore';
 
-export const SCENE_SCHEMA_VERSION = 1;
+/** Schema version 2 added HDRI environment fields:
+ *  environmentPreset, environmentIntensity, environmentRotation, useEnvironment.
+ *  Older saves (v1) get sensible defaults via `migrateSceneState`. */
+export const SCENE_SCHEMA_VERSION = 2;
 export const MAX_SAVED_SCENES = 10;
 export const CURRENT_SCENE_KEY = 'depth-current-scene';
 export const SCENES_INDEX_KEY = 'depth-scenes-index';
@@ -34,6 +37,10 @@ export interface PersistedSceneState {
   shadowSoftness: number;
   shadowColor: string;
   autoLighting: boolean;
+  environmentPreset: EnvironmentPreset;
+  environmentIntensity: number;
+  environmentRotation: number;
+  useEnvironment: boolean;
 }
 
 export interface SavedSceneMeta {
@@ -58,8 +65,12 @@ export function migrateSceneState(
   state: unknown,
   defaults: PersistedSceneState,
 ): PersistedSceneState {
-  if (version === SCENE_SCHEMA_VERSION && state && typeof state === 'object') {
-    return { ...defaults, ...(state as Partial<PersistedSceneState>) };
+  if (state && typeof state === 'object') {
+    // v1 -> v2: HDRI environment fields didn't exist. Spreading defaults first
+    // backfills them; older saves load cleanly with environment turned on.
+    if (version === 1 || version === SCENE_SCHEMA_VERSION) {
+      return { ...defaults, ...(state as Partial<PersistedSceneState>) };
+    }
   }
   // Unknown / older versions: fall back to defaults.
   return defaults;

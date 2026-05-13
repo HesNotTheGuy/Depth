@@ -29,6 +29,10 @@ function defaults(): PersistedSceneState {
     shadowSoftness: 0.5,
     shadowColor: '#000000',
     autoLighting: true,
+    environmentPreset: 'studio',
+    environmentIntensity: 0.3,
+    environmentRotation: 0,
+    useEnvironment: true,
   };
 }
 

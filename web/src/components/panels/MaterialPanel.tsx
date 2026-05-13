@@ -1,18 +1,34 @@
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import { Image, Upload, X, RotateCcw, MousePointerClick, Layers, Pipette } from 'lucide-react';
-import { useSceneStore, type FaceTextureConfig } from '../../store/useSceneStore';
+import { useSceneStore, type FaceTextureConfig, type MaterialPreset } from '../../store/useSceneStore';
+import {
+  generateWoodGrainTexture,
+  generateMarbleTexture,
+  generateFabricTexture,
+  generateLeatherTexture,
+  generateBrushedMetalTexture,
+} from '../../utils/proceduralTextures';
 import { useUIStore } from '../../store/useUIStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
 import { SliderInput } from '../ui/SliderInput';
 
-type MatPreset = 'matte' | 'glossy' | 'metallic' | 'glass' | 'plastic';
+type MatPreset = MaterialPreset;
 
-const presets: { id: MatPreset; label: string; desc: string }[] = [
+const basicPresets: { id: MatPreset; label: string; desc: string }[] = [
   { id: 'matte', label: 'Matte', desc: 'Flat, diffuse' },
   { id: 'glossy', label: 'Glossy', desc: 'Smooth, reflective' },
   { id: 'metallic', label: 'Metal', desc: 'Brushed steel' },
   { id: 'glass', label: 'Glass', desc: 'Transparent' },
   { id: 'plastic', label: 'Plastic', desc: 'Shiny, clearcoat' },
+];
+
+const libraryPresets: { id: MatPreset; label: string; desc: string }[] = [
+  { id: 'wood',           label: 'Wood',          desc: 'Warm grain, matte finish' },
+  { id: 'marble',         label: 'Marble',        desc: 'Polished stone with veining' },
+  { id: 'fabric',         label: 'Fabric',        desc: 'Matte woven cotton' },
+  { id: 'leather',        label: 'Leather',       desc: 'Pebbled, dark brown' },
+  { id: 'brushed-metal',  label: 'Brushed Metal', desc: 'Anisotropic silver streaks' },
+  { id: 'tinted-glass',   label: 'Tinted Glass',  desc: 'Colored transmission' },
 ];
 
 const swatches = [
@@ -153,13 +169,14 @@ export function MaterialPanel() {
   return (
     <div>
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
-        Material
+        Material — Basic
       </label>
-      <div className="space-y-1 mb-5">
-        {presets.map((p) => (
+      <div className="space-y-1 mb-4">
+        {basicPresets.map((p) => (
           <button
             key={p.id}
             onClick={() => updateSelected({ material: p.id })}
+            title={p.desc}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${
               material === p.id
                 ? 'bg-primary/10 ring-1 ring-primary/25'
@@ -189,6 +206,23 @@ export function MaterialPanel() {
               <div className="text-[10px] text-text-muted">{p.desc}</div>
             </div>
           </button>
+        ))}
+      </div>
+
+      <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
+        Material — Library
+      </label>
+      <div className="grid grid-cols-3 gap-1.5 mb-5">
+        {libraryPresets.map((p) => (
+          <LibraryPresetCard
+            key={p.id}
+            id={p.id}
+            label={p.label}
+            desc={p.desc}
+            active={material === p.id}
+            tintColor={color}
+            onClick={() => updateSelected({ material: p.id })}
+          />
         ))}
       </div>
 
@@ -426,13 +460,20 @@ export function MaterialPanel() {
       <div className="space-y-2.5">
         <SliderRow label="Roughness" value={roughness} onChange={(v) => updateSelected({ roughness: v })} />
 
-        {material === 'glass' && (
+        {(material === 'glass' || material === 'tinted-glass') && (
           <>
             <SliderRow label="Thickness" value={opacity} onChange={(v) => updateSelected({ opacity: v })} />
             <SliderRow label="Transmission" value={transmission} onChange={(v) => updateSelected({ transmission: v })} />
             <SliderRow label="IOR" value={ior} onChange={(v) => updateSelected({ ior: v })} min={1.0} max={2.5} step={0.05} />
             <SliderRow label="Reflectivity" value={reflectivity} onChange={(v) => updateSelected({ reflectivity: v })} />
+            {material === 'tinted-glass' && (
+              <SliderRow label="Clearcoat" value={clearcoat} onChange={(v) => updateSelected({ clearcoat: v })} />
+            )}
           </>
+        )}
+
+        {(material === 'brushed-metal') && (
+          <SliderRow label="Metalness" value={metalness} onChange={(v) => updateSelected({ metalness: v })} />
         )}
 
         {material === 'metallic' && (
@@ -451,5 +492,55 @@ export function MaterialPanel() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Small swatch used in the Library grid. Generates its procedural texture
+ *  once via useMemo so opening the panel doesn't repeatedly redraw canvases. */
+function LibraryPresetCard({
+  id, label, desc, active, tintColor, onClick,
+}: {
+  id: MaterialPreset;
+  label: string;
+  desc: string;
+  active: boolean;
+  tintColor: string;
+  onClick: () => void;
+}) {
+  const thumbnail = useMemo(() => {
+    switch (id) {
+      case 'wood':          return generateWoodGrainTexture(96, 96);
+      case 'marble':        return generateMarbleTexture(96, 96);
+      case 'fabric':        return generateFabricTexture(96, 96);
+      case 'leather':       return generateLeatherTexture(96, 96);
+      case 'brushed-metal': return generateBrushedMetalTexture(96, 96);
+      default:              return null;
+    }
+  }, [id]);
+
+  return (
+    <button
+      onClick={onClick}
+      title={`${label} — ${desc}`}
+      className={`flex flex-col items-center gap-1 p-1.5 rounded-lg transition-all ${
+        active ? 'bg-primary/10 ring-1 ring-primary' : 'hover:bg-white/[0.03] ring-1 ring-transparent'
+      }`}
+    >
+      <div
+        className="w-full aspect-square rounded-md border border-white/10 overflow-hidden relative"
+        style={{
+          background: id === 'tinted-glass'
+            ? `linear-gradient(135deg, ${tintColor}cc, ${tintColor}66)`
+            : '#222',
+        }}
+      >
+        {thumbnail && (
+          <img src={thumbnail} alt={label} className="w-full h-full object-cover" />
+        )}
+      </div>
+      <span className={`text-[9px] leading-tight text-center ${active ? 'text-primary' : 'text-text-muted'}`}>
+        {label}
+      </span>
+    </button>
   );
 }
