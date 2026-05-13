@@ -11,6 +11,7 @@ import { AlignmentGuides } from './AlignmentGuides';
 import { BackgroundPlane } from './BackgroundPlane';
 import { SceneLights } from './SceneLights';
 import { SurfaceDrawingOverlay } from './SurfaceDrawingOverlay';
+import { pickColorFromImage, clearColorPickerCache } from '../../utils/colorPicker';
 import { Maximize2, Move3d, RotateCcw, Maximize } from 'lucide-react';
 
 /** Face names for which we render real per-face textures (box / card). */

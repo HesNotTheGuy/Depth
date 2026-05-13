@@ -156,15 +156,9 @@ test.describe('Use cases', () => {
     await setStore(page, { selectedFace: 'front' });
     await expect(page.getByText(/Selected: front/i)).toBeVisible();
 
-    // Inject the face texture by triggering the hidden file input directly.
+    // Inject the face texture via the dedicated hidden input.
     const tex = await synthesizeColorPng(page, '#22c55e');
-    // The MaterialPanel renders a single hidden <input type="file" accept="image/*">
-    // for face uploads (after the texture button is rendered). Use a scoped locator.
-    const fileInputs = page.locator('input[type="file"][accept="image/*"]');
-    // First one is the global texture input; second is the face texture input.
-    // To be robust, set files on whichever input is inside the Material panel
-    // and ends up populating faceTextures.
-    await fileInputs.last().setInputFiles({
+    await page.locator('[data-testid="face-texture-input"]').setInputFiles({
       name: 'screen.png',
       mimeType: 'image/png',
       buffer: tex,
@@ -202,9 +196,7 @@ test.describe('Use cases', () => {
     await page.getByRole('button', { name: /^material$/i }).click();
 
     const logo = await synthesizeColorPng(page, '#ef4444');
-    // First image/* input is the global texture input in the Material panel.
-    const fileInputs = page.locator('input[type="file"][accept="image/*"]');
-    await fileInputs.first().setInputFiles({
+    await page.locator('[data-testid="global-texture-input"]').setInputFiles({
       name: 'logo.png',
       mimeType: 'image/png',
       buffer: logo,
@@ -227,8 +219,7 @@ test.describe('Use cases', () => {
     await expect(page.getByText(/Selected: front/i)).toBeVisible();
 
     const design = await synthesizeColorPng(page, '#0ea5e9');
-    const fileInputs = page.locator('input[type="file"][accept="image/*"]');
-    await fileInputs.last().setInputFiles({
+    await page.locator('[data-testid="face-texture-input"]').setInputFiles({
       name: 'card-front.png',
       mimeType: 'image/png',
       buffer: design,

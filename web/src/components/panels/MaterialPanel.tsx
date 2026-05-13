@@ -365,6 +365,7 @@ export function MaterialPanel() {
             type="file"
             accept="image/*"
             className="hidden"
+            data-testid="face-texture-input"
             onChange={handleFaceTextureUpload}
           />
         </div>
@@ -451,6 +452,7 @@ export function MaterialPanel() {
         type="file"
         accept="image/*"
         className="hidden"
+        data-testid="global-texture-input"
         onChange={handleTextureUpload}
       />
 

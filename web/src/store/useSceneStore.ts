@@ -484,6 +484,13 @@ function nextName(objects: SceneObjectInstance[], type: ObjectPreset): string {
   return `${base} ${n}`;
 }
 
+/** True if `name` looks like our auto-generated "PresetLabel N" string, so we
+ * can safely overwrite it on type change without trampling a user-edited name. */
+function isAutoName(name: string): boolean {
+  const labels = Object.values(PRESET_LABELS).join('|');
+  return new RegExp(`^(${labels}) \\d+$`).test(name);
+}
+
 /** Convert any old flat template state with objectX fields into a SceneObjectInstance partial. */
 function extractLegacyObjectFields(state: Record<string, unknown>): Partial<SceneObjectInstance> | null {
   const mapping: Record<string, keyof SceneObjectInstance> = {
@@ -605,6 +612,14 @@ export const useSceneStore = create<SceneState>()(
         set((s) => ({
           objects: s.objects.map((o) => {
             if (o.id !== id) return o;
+            // When the type changes and the caller didn't supply a custom name,
+            // refresh the auto-generated name to reflect the new type so the
+            // layers panel ("Mug 2") matches what the user sees in the viewport.
+            const typeChanged = updates.type && updates.type !== o.type;
+            const refreshedName = typeChanged && !updates.name && isAutoName(o.name)
+              ? nextName(s.objects.filter((x) => x.id !== id), updates.type!)
+              : undefined;
+            const nameUpdate = refreshedName ? { name: refreshedName } : {};
             // When material changes, apply material preset defaults. Library
             // materials (wood/marble/...) also stamp a procedural texture
             // on the object — but only if the object doesn't already have a
@@ -614,20 +629,21 @@ export const useSceneStore = create<SceneState>()(
               const stampTexture = textureGen && !o.texture
                 ? { texture: textureGen() }
                 : {};
-              return { ...o, ...MATERIAL_DEFAULTS[updates.material], ...stampTexture, ...updates };
+              return { ...o, ...MATERIAL_DEFAULTS[updates.material], ...stampTexture, ...updates, ...nameUpdate };
             }
             // Donut easter-egg: when switching type to donut, apply pink-icing look
             if (updates.type && updates.type !== o.type && updates.type === 'donut') {
               return {
                 ...o,
                 ...updates,
+                ...nameUpdate,
                 color: '#F472B6',
                 material: 'glossy',
                 roughness: 0.3,
                 metalness: 0,
               };
             }
-            return { ...o, ...updates };
+            return { ...o, ...updates, ...nameUpdate };
           }),
         })),
 
