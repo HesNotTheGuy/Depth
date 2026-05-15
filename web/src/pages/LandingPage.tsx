@@ -162,6 +162,12 @@ const FEATURES = [
 /* ------------------------------------------------------------------ */
 /*  SDK code snippet                                                  */
 /* ------------------------------------------------------------------ */
+/** Escape HTML metacharacters so syntax-highlight regexes can safely produce
+ *  HTML wrapping without ever leaking raw markup from the source string. */
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 const CODE_SNIPPET = `#include <depth/depth.h>
 
 depth::Scene scene;
@@ -338,9 +344,11 @@ export function LandingPage() {
               <pre className="p-5 text-[13px] leading-relaxed overflow-x-auto font-mono">
                 <code className="text-text-secondary">
                   {CODE_SNIPPET.split('\n').map((line, i) => {
-                    // Simple syntax highlighting
-                    const highlighted = line
-                      .replace(/(#include\s+<[^>]+>)/g, '<span class="text-accent">$1</span>')
+                    // Simple syntax highlighting. Escape first so the regex
+                    // replacements operate on safe content; the `<` / `>` in
+                    // `#include <…>` become `&lt;` / `&gt;` so we match those.
+                    const highlighted = escapeHtml(line)
+                      .replace(/(#include\s+&lt;[^&]+&gt;)/g, '<span class="text-accent">$1</span>')
                       .replace(/(depth::\w+)/g, '<span class="text-primary">$1</span>')
                       .replace(/(".*?")/g, '<span class="text-green-400">$1</span>')
                       .replace(/(\/\/.*)/g, '<span class="text-text-muted">$1</span>')

@@ -59,6 +59,13 @@ export interface BulkExportResult {
   skipped: number;
 }
 
+/**
+ * Hard cap on the number of variations a single bulk export may produce.
+ * Each variation renders a PNG; without a cap a misconfigured cartesian product
+ * (e.g. 50 colors x 50 backgrounds = 2500) can tie up the browser for minutes.
+ */
+export const MAX_BULK_VARIATIONS = 500;
+
 /** Sanitize a value for use inside a filename. */
 function sanitizeForFilename(s: string): string {
   return s
@@ -234,6 +241,11 @@ export function runBulkExport(
     const selectedId = snapshot.selectedObjectId;
 
     const total = totalVariations(config.dimensions);
+    if (total > MAX_BULK_VARIATIONS) {
+      throw new Error(
+        `Bulk export exceeds limit: ${total} variations requested, max is ${MAX_BULK_VARIATIONS}.`
+      );
+    }
     onProgress({ current: 0, total, lastFilename: null });
 
     if (total === 0) {

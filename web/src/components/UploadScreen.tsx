@@ -3,6 +3,7 @@ import { Upload, ArrowRight, Sparkles, Image } from 'lucide-react';
 import { useSceneStore } from '../store/useSceneStore';
 import { useUIStore } from '../store/useUIStore';
 import { estimateLighting } from '../utils/lightingEstimator';
+import { validateImageWithModal } from '../utils/uploadLimits';
 
 export function UploadScreen() {
   const setBackgroundImage = useSceneStore((s) => s.setBackgroundImage);
@@ -15,7 +16,7 @@ export function UploadScreen() {
 
   const handleFile = useCallback(
     async (file: File) => {
-      if (!file.type.startsWith('image/')) return;
+      if (!(await validateImageWithModal(file))) return;
 
       const reader = new FileReader();
       reader.onload = async () => {

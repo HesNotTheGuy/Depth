@@ -73,6 +73,14 @@ function useObjModel(url: string | null) {
       setGeometry(null);
       return;
     }
+    // Only blob: (current runtime path via URL.createObjectURL) and data:
+    // (future inline payloads) are trusted. Persisted scenes could otherwise
+    // smuggle in http(s) URLs and turn import into SSRF / tracking pixel.
+    if (!url.startsWith('blob:') && !url.startsWith('data:')) {
+      console.warn('[depth] Refusing to load OBJ from non-blob URL:', url.slice(0, 80));
+      setError(true);
+      return;
+    }
     setError(false);
     const loader = new OBJLoader();
     loader.load(
@@ -126,7 +134,12 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       const handle = new THREE.TorusGeometry(0.18, 0.04, 12, 24, Math.PI);
       handle.rotateZ(Math.PI / 2);
       handle.translate(0.35, 0, 0);
-      return mergeGeometries([body, handle], false) ?? body;
+      const merged = mergeGeometries([body, handle], false);
+      body.dispose();
+      handle.dispose();
+      // Fallback can't reuse `body` — it's been disposed. Build a fresh
+      // cylinder so the caller still gets a usable geometry.
+      return merged ?? new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
     }
     case 'phone': {
       const w = 0.38, h = 0.75, r = 0.06;
@@ -181,12 +194,19 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       handleR.translate(0.2, bagH, 0);
       const merged = mergeGeometries([bagGeo, handleL, handleR], false);
       if (merged) {
+        bagGeo.dispose();
+        handleL.dispose();
+        handleR.dispose();
         merged.computeBoundingBox();
         const c = new THREE.Vector3();
         merged.boundingBox!.getCenter(c);
         merged.translate(-c.x, -c.y, -c.z);
         return merged;
       }
+      // Merge failed — dispose the unused intermediates and return the
+      // main bag geometry as a fallback.
+      handleL.dispose();
+      handleR.dispose();
       return bagGeo;
     }
     case 'card':
@@ -201,12 +221,16 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       screen.translate(0, 0, -0.35);
       const merged = mergeGeometries([base, screen], false);
       if (merged) {
+        base.dispose();
+        screen.dispose();
         merged.computeBoundingBox();
         const c = new THREE.Vector3();
         merged.boundingBox!.getCenter(c);
         merged.translate(-c.x, -c.y, -c.z);
         return merged;
       }
+      // Merge failed — keep base, drop the unused screen intermediate.
+      screen.dispose();
       return base;
     }
     case 'tablet': {
@@ -240,7 +264,18 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       botSeam.rotateX(Math.PI / 2);
       botSeam.translate(0, -0.4, 0);
       const merged = mergeGeometries([body, seam, top, botSeam], false);
-      return merged ?? body;
+      if (merged) {
+        body.dispose();
+        seam.dispose();
+        top.dispose();
+        botSeam.dispose();
+        return merged;
+      }
+      // Merge failed — keep body, dispose unused intermediates.
+      seam.dispose();
+      top.dispose();
+      botSeam.dispose();
+      return body;
     }
     case 'book':
       return new THREE.BoxGeometry(0.7, 1.0, 0.15);
@@ -274,7 +309,14 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       }
       const parts = [body, icing, ...sprinkles];
       const merged = mergeGeometries(parts, false);
-      return merged ?? body;
+      if (merged) {
+        for (const p of parts) p.dispose();
+        return merged;
+      }
+      // Merge failed — keep body, dispose the rest.
+      icing.dispose();
+      for (const s of sprinkles) s.dispose();
+      return body;
     }
     default:
       return null;
@@ -354,18 +396,37 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
 
   const { geometry: customGeometry } = useObjModel(objectType === 'custom' ? customModelUrl : null);
 
-  // Global texture
+  // Global texture. Each time the URL changes, dispose the previously-loaded
+  // GPU texture before swapping in the next one. On unmount, dispose whatever
+  // is still loaded. Without this, every texture swap (e.g. switching
+  // material presets) leaks VRAM until GC eventually reclaims the JS wrapper.
   const [loadedTexture, setLoadedTexture] = useState<THREE.Texture | null>(null);
   useEffect(() => {
-    if (!objectTexture) { setLoadedTexture(null); return; }
+    if (!objectTexture) {
+      setLoadedTexture((prev) => { prev?.dispose(); return null; });
+      return;
+    }
+    let cancelled = false;
     const loader = new THREE.TextureLoader();
     loader.load(objectTexture, (tex) => {
+      if (cancelled) { tex.dispose(); return; }
       tex.wrapS = THREE.RepeatWrapping;
       tex.wrapT = THREE.RepeatWrapping;
       tex.colorSpace = THREE.SRGBColorSpace;
-      setLoadedTexture(tex);
+      setLoadedTexture((prev) => { prev?.dispose(); return tex; });
     });
+    return () => { cancelled = true; };
   }, [objectTexture]);
+
+  // Final unmount cleanup — covers the case where the component goes away
+  // without `objectTexture` flipping to null first. We track the latest
+  // texture in a ref so the unmount cleanup disposes whatever is actually
+  // loaded (not the stale closure-captured initial null).
+  const loadedTextureRef = useRef<THREE.Texture | null>(null);
+  useEffect(() => { loadedTextureRef.current = loadedTexture; }, [loadedTexture]);
+  useEffect(() => {
+    return () => { loadedTextureRef.current?.dispose(); };
+  }, []);
 
   useEffect(() => {
     if (!loadedTexture) return;
@@ -379,27 +440,50 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     invalidate();
   }, [loadedTexture, textureRepeat, textureOffset, textureRotation, invalidate]);
 
-  // Face textures
+  // Face textures. Same disposal discipline as the global texture: previous
+  // textures must be released before swapping in fresh ones, otherwise every
+  // edit to a faceTextures entry leaks a GPU texture.
   const [loadedFaceTextures, setLoadedFaceTextures] = useState<Record<string, THREE.Texture>>({});
   useEffect(() => {
     const entries = Object.entries(faceTextures);
-    if (entries.length === 0) { setLoadedFaceTextures({}); return; }
+    if (entries.length === 0) {
+      setLoadedFaceTextures((prev) => {
+        for (const t of Object.values(prev)) t.dispose();
+        return {};
+      });
+      return;
+    }
     let cancelled = false;
     const loadAll = async () => {
       const result: Record<string, THREE.Texture> = {};
       for (const [face, config] of entries) {
         const tex = await loadTextureFromUrl(config.url, config);
-        if (cancelled) return;
+        if (cancelled) { tex.dispose(); return; }
         result[face] = tex;
       }
       if (!cancelled) {
-        setLoadedFaceTextures(result);
+        setLoadedFaceTextures((prev) => {
+          for (const t of Object.values(prev)) t.dispose();
+          return result;
+        });
         invalidate();
+      } else {
+        for (const t of Object.values(result)) t.dispose();
       }
     };
     loadAll();
     return () => { cancelled = true; };
   }, [faceTextures, invalidate]);
+
+  // Unmount cleanup for face textures, tracked via ref to escape the
+  // closure-captured initial state.
+  const loadedFaceTexturesRef = useRef<Record<string, THREE.Texture>>({});
+  useEffect(() => { loadedFaceTexturesRef.current = loadedFaceTextures; }, [loadedFaceTextures]);
+  useEffect(() => {
+    return () => {
+      for (const t of Object.values(loadedFaceTexturesRef.current)) t.dispose();
+    };
+  }, []);
 
   useEffect(() => {
     for (const [face, config] of Object.entries(faceTextures)) {
@@ -434,6 +518,19 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
   }, [position.x, position.z, surfaces, snapToSurface, objectType, scale]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const primitiveGeometry = useMemo(() => buildPrimitiveGeometry(objectType), [objectType]);
+  // Dispose the previous primitive geometry when objectType changes (and on
+  // unmount). Without this, every type change leaks a BufferGeometry — the
+  // useMemo just drops its reference and GC eventually collects the JS
+  // wrapper, but the GPU buffer stays allocated until then.
+  const prevPrimitiveRef = useRef<THREE.BufferGeometry | null>(null);
+  useEffect(() => {
+    const prev = prevPrimitiveRef.current;
+    if (prev && prev !== primitiveGeometry) prev.dispose();
+    prevPrimitiveRef.current = primitiveGeometry;
+  }, [primitiveGeometry]);
+  useEffect(() => {
+    return () => { prevPrimitiveRef.current?.dispose(); };
+  }, []);
   const geometry = objectType === 'custom' ? customGeometry : primitiveGeometry;
 
   const needsPhysical = material === 'glass' || material === 'plastic';
@@ -561,12 +658,15 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
           if (o.id === id || !o.visible) continue;
           // Use the primitive shape's geometry for AABB. For 'custom' types
           // we don't have the loaded OBJ here; fall back to a unit box which
-          // still gives reasonable edge/center alignment behavior.
+          // still gives reasonable edge/center alignment behavior. Dispose
+          // immediately after reading the bounds — without this, every drag
+          // pointer-move leaks one geometry per other-object in the scene.
           const otherGeo = buildPrimitiveGeometry(o.type) ?? new THREE.BoxGeometry(1, 1, 1);
           const bounds = computeWorldBounds(
             { position: o.position, rotation: o.rotation, scale: o.scale },
             otherGeo,
           );
+          otherGeo.dispose();
           if (!bounds) continue;
           otherObjects.push({
             id: o.id,

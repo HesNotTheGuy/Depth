@@ -6,7 +6,7 @@
   "ui": "ui.html",
   "editorType": ["figma"],
   "networkAccess": {
-    "allowedDomains": ["*"],
+    "allowedDomains": ["localhost:5173", "depth.app"],
     "reasoning": "Loads the Depth web editor in an iframe and fetches exported PNG data."
   }
 }

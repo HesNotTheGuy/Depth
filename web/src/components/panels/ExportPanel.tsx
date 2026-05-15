@@ -7,11 +7,16 @@ import { captureComposite, captureLayered } from '../../utils/exportUtils';
 import {
   runBulkExport,
   totalVariations,
+  MAX_BULK_VARIATIONS,
   type VariationDimension,
   type VariationDimensionKind,
   type MaterialPreset,
   type BulkExportHandle,
 } from '../../utils/bulkExport';
+import { confirmModal } from '../../store/useModalStore';
+import { validateImageWithModal } from '../../utils/uploadLimits';
+
+const BULK_WARN_THRESHOLD = 50;
 
 const scales = [
   { label: '1x', value: 1 },
@@ -146,6 +151,7 @@ function BackgroundConfig({ dimension, onChange }: { dimension: Extract<Variatio
     if (!files || files.length === 0) return;
     const added: { label: string; dataUrl: string | null }[] = [];
     for (const file of Array.from(files)) {
+      if (!(await validateImageWithModal(file))) continue;
       const dataUrl = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result as string);
@@ -298,6 +304,17 @@ export function ExportPanel() {
   const handleBulkExport = useCallback(async () => {
     if (!renderer || !scene || !camera) return;
     if (activeDimensions.length === 0 || bulkTotal === 0) return;
+    if (bulkTotal > MAX_BULK_VARIATIONS) return;
+    if (bulkTotal > BULK_WARN_THRESHOLD) {
+      const ok = await confirmModal({
+        title: 'Confirm bulk export',
+        description: `This will render ${bulkTotal} variations and may take several minutes. The browser tab will be busy until rendering completes.`,
+        destructive: false,
+        confirmLabel: `Render ${bulkTotal} variations`,
+        cancelLabel: 'Cancel',
+      });
+      if (!ok) return;
+    }
     setBusy(true);
     setStatus(`Exporting 0/${bulkTotal}...`);
     setBulkProgress({ current: 0, total: bulkTotal });
@@ -481,7 +498,24 @@ export function ExportPanel() {
 
                 {bulkTotal > 0 && (
                   <div className="text-[11px] text-text-secondary">
-                    Will export <span className="font-semibold text-primary">{bulkTotal}</span> images
+                    Will export{' '}
+                    <span
+                      className={`font-semibold ${
+                        bulkTotal > MAX_BULK_VARIATIONS
+                          ? 'text-danger'
+                          : bulkTotal > BULK_WARN_THRESHOLD
+                            ? 'text-amber-400'
+                            : 'text-primary'
+                      }`}
+                    >
+                      {bulkTotal}
+                    </span>{' '}
+                    images
+                    {bulkTotal > MAX_BULK_VARIATIONS && (
+                      <span className="text-danger ml-1">
+                        (over {MAX_BULK_VARIATIONS} limit)
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -514,12 +548,19 @@ export function ExportPanel() {
       {bulkEnabled && bulkTotal > 0 ? (
         <button
           onClick={handleBulkExport}
-          disabled={!canExport || noObjects}
-          title={noObjects ? 'Add an object to enable bulk export' : undefined}
+          disabled={!canExport || noObjects || bulkTotal > MAX_BULK_VARIATIONS}
+          title={
+            bulkTotal > MAX_BULK_VARIATIONS
+              ? `Bulk export is capped at ${MAX_BULK_VARIATIONS} variations. Reduce dimensions to proceed.`
+              : noObjects
+                ? 'Add an object to enable bulk export'
+                : undefined
+          }
           className="w-full flex items-center justify-center gap-2 py-2.5 mb-2 bg-gradient-to-r from-primary to-primary-hover hover:brightness-110 text-white rounded-lg text-xs font-semibold transition-all shadow-lg shadow-primary/15 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:brightness-100"
         >
           {busy ? <Loader size={14} className="animate-spin" /> : <Package size={14} />}
           Export {bulkTotal} variations as ZIP
+          {bulkTotal > BULK_WARN_THRESHOLD && bulkTotal <= MAX_BULK_VARIATIONS && ' (Confirm)'}
         </button>
       ) : (
         <button

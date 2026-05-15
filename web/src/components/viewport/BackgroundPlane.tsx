@@ -19,20 +19,34 @@ export function BackgroundPlane() {
   const meshRef = useRef<THREE.Mesh>(null);
   const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
-  // Load texture asynchronously
+  // Load texture asynchronously. Dispose any previously-loaded texture when
+  // the source changes or the component unmounts, otherwise swapping
+  // background images leaks the old image's GPU texture.
   useEffect(() => {
     if (!backgroundImage) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear texture when input becomes null
-      setTexture(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- clear + dispose when input becomes null
+      setTexture((prev) => { prev?.dispose(); return null; });
       return;
     }
+    let cancelled = false;
     const loader = new THREE.TextureLoader();
     loader.load(backgroundImage, (tex) => {
+      if (cancelled) { tex.dispose(); return; }
       tex.colorSpace = THREE.SRGBColorSpace;
-      setTexture(tex);
+      setTexture((prev) => { prev?.dispose(); return tex; });
       invalidate();
     });
+    return () => { cancelled = true; };
   }, [backgroundImage, invalidate]);
+
+  // Unmount cleanup — dispose whatever's currently loaded. Sync the ref
+  // inside an effect (not during render) so we don't violate the React
+  // rules-of-refs lint.
+  const textureRef = useRef<THREE.Texture | null>(null);
+  useEffect(() => { textureRef.current = texture; }, [texture]);
+  useEffect(() => {
+    return () => { textureRef.current?.dispose(); };
+  }, []);
 
   // Position the plane to fill the camera frustum, always facing camera
   useEffect(() => {

@@ -90,8 +90,18 @@
         parent.postMessage({ pluginMessage: { type: 'close' } }, '*');
       });
 
+      // Origins permitted to post export messages into this plugin UI.
+      // Dev runs Vite on localhost:5173; prod runs on depth.app (placeholder —
+      // the prod domain may change before launch, update both this list and
+      // manifest.json `allowedDomains` together).
+      const ALLOWED_ORIGINS = new Set([
+        'http://localhost:5173',
+        'https://depth.app',
+      ]);
+
       // Listen for the export message from the Depth web app running in the iframe.
       window.addEventListener('message', async (event) => {
+        if (!ALLOWED_ORIGINS.has(event.origin)) return;
         const data = event.data;
         if (!data || typeof data !== 'object') return;
 

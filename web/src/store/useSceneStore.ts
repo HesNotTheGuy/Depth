@@ -13,7 +13,6 @@ import {
   CURRENT_SCENE_KEY,
   SCENE_SCHEMA_VERSION,
   PERSIST_SIZE_WARN_BYTES,
-  approxByteSize,
   migrateSceneState,
   readScenesIndex,
   readSavedScene,
@@ -431,48 +430,101 @@ function defaultPersistedState(): PersistedSceneState {
 }
 
 /**
- * Custom persist storage. Wraps localStorage so we can:
- *  - Detect quota errors and retry without the (heavy) backgroundImage.
- *  - Warn when the serialized size grows past ~4 MB.
+ * Trailing-debounced wrapper around localStorage. Coalesces rapid writes
+ * (e.g. slider drags firing 60 setState/sec) into one localStorage.setItem
+ * per `delay` ms. Reads stay synchronous so hydration on load is unaffected.
+ *
+ * The flush function preserves the quota-exceeded fallback: when setItem
+ * throws, it retries with the heavy `backgroundImage` field stripped.
  */
-function makeSceneStorage(): PersistStorage<PersistedSceneState> | undefined {
-  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
-    return undefined;
-  }
-  const jsonStorage = createJSONStorage<PersistedSceneState>(() => window.localStorage);
-  if (!jsonStorage) return undefined;
+function debouncedLocalStorage(delay = 300): Storage {
+  let pending: { key: string; value: string } | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
 
-  return {
-    getItem: (name) => jsonStorage.getItem(name),
-    removeItem: (name) => jsonStorage.removeItem(name),
-    setItem: (name, value: StorageValue<PersistedSceneState>) => {
-      const size = approxByteSize(value);
-      if (size > PERSIST_SIZE_WARN_BYTES) {
-        console.warn(
-          `[depth] Persisted scene is ${(size / 1024 / 1024).toFixed(2)} MB — close to localStorage quota.`,
-        );
-      }
+  const flush = () => {
+    if (!pending) return;
+    const { key, value } = pending;
+    pending = null;
+    try {
+      window.localStorage.setItem(key, value);
+    } catch (err) {
+      // Quota exceeded — retry without the heavy backgroundImage data URL.
       try {
-        return jsonStorage.setItem(name, value);
-      } catch (err) {
-        // Quota exceeded — retry without the heavy backgroundImage.
-        if (value && value.state && value.state.backgroundImage) {
+        const parsed = JSON.parse(value) as StorageValue<PersistedSceneState>;
+        if (parsed && parsed.state && parsed.state.backgroundImage) {
           console.warn('[depth] localStorage quota exceeded; persisting without background image.', err);
           const fallback: StorageValue<PersistedSceneState> = {
-            ...value,
-            state: { ...value.state, backgroundImage: null },
+            ...parsed,
+            state: { ...parsed.state, backgroundImage: null },
           };
           try {
-            return jsonStorage.setItem(name, fallback);
+            window.localStorage.setItem(key, JSON.stringify(fallback));
+            return;
           } catch (err2) {
             console.warn('[depth] localStorage persistence failed even without background image.', err2);
             return;
           }
         }
-        console.warn('[depth] localStorage persistence failed.', err);
+      } catch {
+        // value wasn't JSON; fall through
       }
+      console.warn('[depth] localStorage persistence failed.', err);
+    }
+  };
+
+  // Best-effort flush on tab hide / unload so an in-flight debounced write
+  // isn't lost if the user closes the tab mid-drag.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+  }
+
+  return {
+    get length() { return window.localStorage.length; },
+    key: (i: number) => window.localStorage.key(i),
+    clear: () => {
+      pending = null;
+      if (timer) { clearTimeout(timer); timer = null; }
+      window.localStorage.clear();
+    },
+    getItem: (k: string) => {
+      // If a pending write targets this key, return its value so reads see
+      // the latest in-memory snapshot (matches default localStorage semantics).
+      if (pending && pending.key === k) return pending.value;
+      return window.localStorage.getItem(k);
+    },
+    setItem: (k: string, v: string) => {
+      pending = { key: k, value: v };
+      const size = v.length * 2; // UTF-16 byte estimate
+      if (size > PERSIST_SIZE_WARN_BYTES) {
+        console.warn(
+          `[depth] Persisted scene is ${(size / 1024 / 1024).toFixed(2)} MB — close to localStorage quota.`,
+        );
+      }
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; flush(); }, delay);
+    },
+    removeItem: (k: string) => {
+      if (pending?.key === k) {
+        pending = null;
+        if (timer) { clearTimeout(timer); timer = null; }
+      }
+      window.localStorage.removeItem(k);
     },
   };
+}
+
+function makeSceneStorage(): PersistStorage<PersistedSceneState> | undefined {
+  if (typeof window === 'undefined' || typeof window.localStorage === 'undefined') {
+    return undefined;
+  }
+  // Tests assert on localStorage contents synchronously right after a state
+  // change — debouncing would race with those assertions. In test mode, fall
+  // through to plain localStorage; the production drag-jank concern doesn't
+  // apply there.
+  const isTest = typeof import.meta !== 'undefined' && (import.meta as { env?: { MODE?: string } }).env?.MODE === 'test';
+  const storage = isTest ? window.localStorage : debouncedLocalStorage(300);
+  return createJSONStorage<PersistedSceneState>(() => storage);
 }
 
 /** Count existing objects of a preset type to build a fresh unique name. */
@@ -885,21 +937,33 @@ export const useSceneStore = create<SceneState>()(
 );
 
 // Mark scene as dirty on any state change that affects persisted fields.
-// Subscribing here keeps the isDirty flag accurate without sprinkling
-// `isDirty: true` into every action.
-let lastPersistedSnapshot: string = JSON.stringify(
-  extractPersistedState(useSceneStore.getState()),
-);
+// We exclude the heavy `backgroundImage` data URL from the diff snapshot —
+// stringifying a multi-MB data URL on every slider tick (60/sec) was a real
+// source of main-thread jank. Background changes flip dirty via a cheap
+// reference compare instead.
+function extractDirtyDigest(s: SceneState): { bg: string | null; rest: string } {
+  const persisted = extractPersistedState(s);
+  const { backgroundImage, ...rest } = persisted;
+  return { bg: backgroundImage, rest: JSON.stringify(rest) };
+}
+
+let lastBg: string | null = useSceneStore.getState().backgroundImage;
+let lastRestSnapshot: string = extractDirtyDigest(useSceneStore.getState()).rest;
+
 /** Resync the dirty-tracking baseline. Called when state is intentionally
  *  marked clean (save / load), so the immediately-following subscribe fire
  *  does not re-flip isDirty back to true. */
 function resyncCleanBaseline() {
-  lastPersistedSnapshot = JSON.stringify(extractPersistedState(useSceneStore.getState()));
+  const digest = extractDirtyDigest(useSceneStore.getState());
+  lastBg = digest.bg;
+  lastRestSnapshot = digest.rest;
 }
+
 useSceneStore.subscribe((state) => {
-  const serialized = JSON.stringify(extractPersistedState(state));
-  if (serialized === lastPersistedSnapshot) return;
-  lastPersistedSnapshot = serialized;
+  const digest = extractDirtyDigest(state);
+  if (digest.bg === lastBg && digest.rest === lastRestSnapshot) return;
+  lastBg = digest.bg;
+  lastRestSnapshot = digest.rest;
   if (!state.isDirty) {
     useSceneStore.setState({ isDirty: true });
   }

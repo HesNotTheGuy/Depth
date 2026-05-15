@@ -11,6 +11,7 @@ import {
 import { useUIStore } from '../../store/useUIStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
 import { SliderInput } from '../ui/SliderInput';
+import { validateImageWithModal } from '../../utils/uploadLimits';
 
 type MatPreset = MaterialPreset;
 
@@ -102,26 +103,28 @@ export function MaterialPanel() {
   const activeFaceConfig: FaceTextureConfig | null =
     selectedFace ? faceTextures[selectedFace] ?? null : null;
 
-  const handleTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+    if (!(await validateImageWithModal(file))) return;
     const reader = new FileReader();
     reader.onload = () => {
       updateSelected({ texture: reader.result as string });
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
-  const handleFaceTextureUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFaceTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file || !selectedFace) return;
+    if (!(await validateImageWithModal(file))) return;
     const reader = new FileReader();
     reader.onload = () => {
       setFaceTextureForSelected(selectedFace, reader.result as string);
     };
     reader.readAsDataURL(file);
-    e.target.value = '';
   };
 
   const applyPickedColor = (hex: string) => {

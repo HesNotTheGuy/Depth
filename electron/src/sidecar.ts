@@ -23,12 +23,20 @@ interface SidecarResponse {
  *
  * Restarts on crash (with simple backoff).
  */
+/** Per-request timeout. Beyond this we drop the pending entry and reject. */
+const REQUEST_TIMEOUT_MS = 30_000;
+
+/** If the sidecar stays alive at least this long, treat the restart budget as healthy and reset. */
+const HEALTHY_UPTIME_MS = 30_000;
+
 export class Sidecar {
   private proc: ChildProcessWithoutNullStreams | null = null;
   private pending = new Map<string, PendingRequest>();
+  private timers = new Map<string, NodeJS.Timeout>();
   private buffer = '';
   private restartCount = 0;
   private stopped = false;
+  private startedAt = 0;
 
   constructor(private readonly binPath: string) {}
 
@@ -39,6 +47,8 @@ export class Sidecar {
 
   stop(): void {
     this.stopped = true;
+    for (const t of this.timers.values()) clearTimeout(t);
+    this.timers.clear();
     for (const [, req] of this.pending) {
       req.reject(new Error('sidecar_stopped'));
     }
@@ -64,9 +74,25 @@ export class Sidecar {
         return;
       }
       const id = randomUUID();
+      const timer = setTimeout(() => {
+        this.pending.delete(id);
+        this.timers.delete(id);
+        reject(new Error(`sidecar request "${method}" timed out after ${REQUEST_TIMEOUT_MS}ms`));
+      }, REQUEST_TIMEOUT_MS);
+      this.timers.set(id, timer);
       this.pending.set(id, {
-        resolve: (v) => resolve(v as T),
-        reject,
+        resolve: (v) => {
+          const t = this.timers.get(id);
+          if (t) clearTimeout(t);
+          this.timers.delete(id);
+          resolve(v as T);
+        },
+        reject: (e) => {
+          const t = this.timers.get(id);
+          if (t) clearTimeout(t);
+          this.timers.delete(id);
+          reject(e);
+        },
         method,
         startedAt: Date.now(),
       });
@@ -74,6 +100,8 @@ export class Sidecar {
       try {
         this.proc.stdin.write(payload);
       } catch (err) {
+        clearTimeout(timer);
+        this.timers.delete(id);
         this.pending.delete(id);
         reject(err as Error);
       }
@@ -85,6 +113,7 @@ export class Sidecar {
       this.proc = spawn(this.binPath, [], {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
+      this.startedAt = Date.now();
     } catch (err) {
       console.error('[sidecar] spawn failed:', err);
       this.proc = null;
@@ -101,12 +130,21 @@ export class Sidecar {
 
     this.proc.on('exit', (code, signal) => {
       console.warn(`[sidecar] exited code=${code} signal=${signal}`);
-      // Reject all pending requests.
+      const uptime = this.startedAt > 0 ? Date.now() - this.startedAt : 0;
+      // Reject all pending requests (and clear their timers).
+      for (const t of this.timers.values()) clearTimeout(t);
+      this.timers.clear();
       for (const [, req] of this.pending) {
         req.reject(new Error(`sidecar_exited code=${code}`));
       }
       this.pending.clear();
       this.proc = null;
+      // Healthy uptime resets the lifetime restart budget so long sessions
+      // with occasional crashes don't permanently exhaust it.
+      if (uptime >= HEALTHY_UPTIME_MS && this.restartCount > 0) {
+        console.info(`[sidecar] healthy uptime ${uptime}ms, resetting restartCount`);
+        this.restartCount = 0;
+      }
       this.maybeRestart();
     });
 
