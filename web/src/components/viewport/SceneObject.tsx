@@ -186,11 +186,18 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       bagShape.lineTo(tw, bagH);
       bagShape.lineTo(-tw, bagH);
       bagShape.closePath();
+      // ExtrudeGeometry is non-indexed but TorusGeometry is indexed.
+      // mergeGeometries requires all parts to share index-ness, so convert
+      // the torus handles to non-indexed to match the bag body.
       const bagGeo = new THREE.ExtrudeGeometry(bagShape, { depth, bevelEnabled: false });
       bagGeo.translate(0, 0, -depth / 2);
-      const handleL = new THREE.TorusGeometry(0.1, 0.015, 8, 16, Math.PI);
+      const torusL = new THREE.TorusGeometry(0.1, 0.015, 8, 16, Math.PI);
+      const handleL = torusL.toNonIndexed();
+      torusL.dispose();
       handleL.translate(-0.2, bagH, 0);
-      const handleR = new THREE.TorusGeometry(0.1, 0.015, 8, 16, Math.PI);
+      const torusR = new THREE.TorusGeometry(0.1, 0.015, 8, 16, Math.PI);
+      const handleR = torusR.toNonIndexed();
+      torusR.dispose();
       handleR.translate(0.2, bagH, 0);
       const merged = mergeGeometries([bagGeo, handleL, handleR], false);
       if (merged) {

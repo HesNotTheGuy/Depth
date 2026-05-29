@@ -7,7 +7,6 @@ beforeEach(() => {
   useUIStore.setState({
     step: 'upload',
     sidebarTab: 'object',
-    showExportModal: false,
     isAnalyzing: false,
     isDrawing: false,
     drawingPoints: [],

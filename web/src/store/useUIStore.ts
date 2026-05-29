@@ -8,7 +8,6 @@ export type GizmoMode = 'translate' | 'rotate' | 'scale';
 interface UIState {
   step: AppStep;
   sidebarTab: SidebarTab;
-  showExportModal: boolean;
   isAnalyzing: boolean;
 
   // Surface drawing mode
@@ -31,7 +30,6 @@ interface UIState {
 
   setStep: (step: AppStep) => void;
   setSidebarTab: (tab: SidebarTab) => void;
-  setShowExportModal: (show: boolean) => void;
   setIsAnalyzing: (analyzing: boolean) => void;
   startDrawing: () => void;
   addDrawingPoint: (point: Point2D) => void;
@@ -49,7 +47,6 @@ interface UIState {
 export const useUIStore = create<UIState>((set) => ({
   step: 'upload',
   sidebarTab: 'object',
-  showExportModal: false,
   isAnalyzing: false,
   isDrawing: false,
   drawingPoints: [],
@@ -62,7 +59,6 @@ export const useUIStore = create<UIState>((set) => ({
 
   setStep: (step) => set({ step }),
   setSidebarTab: (tab) => set({ sidebarTab: tab }),
-  setShowExportModal: (show) => set({ showExportModal: show }),
   setIsAnalyzing: (analyzing) => set({ isAnalyzing: analyzing }),
   startDrawing: () => set({ isDrawing: true, drawingPoints: [], sidebarTab: 'surfaces' }),
   addDrawingPoint: (point) =>

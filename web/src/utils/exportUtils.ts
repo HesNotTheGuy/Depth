@@ -37,6 +37,26 @@ function depthBridge(): DepthElectronBridge {
   return (window as unknown as { depth: DepthElectronBridge }).depth;
 }
 
+/** Material presets the native sidecar renderer fully supports. Anything
+ *  else (the procedural "library" presets) is mapped to Matte and would
+ *  render incorrectly, so we route those scenes through the canvas path. */
+const SIDECAR_MATERIALS = new Set(['matte', 'glossy', 'metallic', 'glass', 'plastic']);
+
+/** True when every object in the scene uses only features the native
+ *  sidecar can render faithfully. Returns false for per-face textures,
+ *  custom OBJ meshes, non-normal blend modes, or library materials. */
+function sidecarCanRender(): boolean {
+  const s = useSceneStore.getState();
+  if (s.blendMode !== 'normal') return false;
+  return s.objects.every(
+    (o) =>
+      o.type !== 'custom' &&
+      !o.customModelUrl &&
+      Object.keys(o.faceTextures).length === 0 &&
+      SIDECAR_MATERIALS.has(o.material)
+  );
+}
+
 /** Decode a base64 PNG into a Blob for download/postMessage. */
 function base64ToBlob(b64: string, mime = 'image/png'): Blob {
   const bin = atob(b64);
@@ -200,7 +220,13 @@ export async function captureComposite(
   // Desktop fast-path: hand the scene to the native sidecar for a
   // high-quality offline render. Falls through to the canvas pipeline
   // if the bridge errors so the export still succeeds.
-  if (isElectron && format === 'png') {
+  //
+  // The sidecar renderer doesn't yet honor per-face textures, custom OBJ
+  // meshes, non-normal blend modes, or the library material presets (it
+  // maps unknown presets to Matte). When the scene uses any of those, the
+  // native render would be visibly wrong, so we skip it and let the
+  // accurate Three.js canvas path handle the export instead.
+  if (isElectron && format === 'png' && sidecarCanRender()) {
     try {
       const result = await depthBridge().render(captureSidecarScene(camera, w, h));
       const nativeBlob = base64ToBlob(result.png, 'image/png');

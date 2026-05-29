@@ -157,12 +157,3 @@ export function deleteSavedScene(id: string): void {
   window.localStorage.removeItem(SCENE_KEY_PREFIX + id);
   writeScenesIndex(readScenesIndex().filter((s) => s.id !== id));
 }
-
-/** Approximate JSON byte size (UTF-8) used for quota-pressure warnings. */
-export function approxByteSize(value: unknown): number {
-  try {
-    return new Blob([JSON.stringify(value)]).size;
-  } catch {
-    return 0;
-  }
-}
