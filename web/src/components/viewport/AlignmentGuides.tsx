@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import * as THREE from 'three';
 import { useAlignmentStore } from '../../store/useAlignmentStore';
 import type { AlignmentSnap } from '../../utils/alignmentUtils';
@@ -29,22 +29,33 @@ function endpointsForGuide(snap: AlignmentSnap): [THREE.Vector3, THREE.Vector3] 
 }
 
 function GuideLine({ snap }: { snap: AlignmentSnap }) {
-  const geometry = useMemo(() => {
+  // Build the THREE.Line imperatively and render via <primitive>. The
+  // intrinsic <line> JSX element collides with SVG's <line> in the build's
+  // tsconfig (R3F's type augmentation doesn't extend the SVG tag), so the
+  // raycast prop fails to typecheck. A primitive sidesteps that entirely.
+  const line = useMemo(() => {
     const [a, b] = endpointsForGuide(snap);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute([a.x, a.y, a.z, b.x, b.y, b.z], 3),
-    );
-    return g;
+    const g = new THREE.BufferGeometry().setFromPoints([a, b]);
+    const m = new THREE.LineBasicMaterial({
+      color: GUIDE_COLOR,
+      transparent: true,
+      opacity: 0.85,
+      depthTest: false,
+    });
+    const ln = new THREE.Line(g, m);
+    ln.raycast = () => {}; // guides must never intercept pointer picks
+    return ln;
   }, [snap]);
 
-  return (
-    <line raycast={() => null}>
-      <primitive object={geometry} attach="geometry" />
-      <lineBasicMaterial color={GUIDE_COLOR} transparent opacity={0.85} depthTest={false} />
-    </line>
+  useEffect(
+    () => () => {
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    },
+    [line],
   );
+
+  return <primitive object={line} />;
 }
 
 export function AlignmentGuides() {

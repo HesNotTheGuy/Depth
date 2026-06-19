@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { useSceneStore } from './useSceneStore';
+import { useSceneStore, DEFAULT_FLOOR_REFLECTION } from './useSceneStore';
 import {
   CURRENT_SCENE_KEY,
   SCENES_INDEX_KEY,
@@ -33,6 +33,7 @@ function defaults(): PersistedSceneState {
     environmentIntensity: 0.3,
     environmentRotation: 0,
     useEnvironment: true,
+    floorReflection: { ...DEFAULT_FLOOR_REFLECTION },
   };
 }
 

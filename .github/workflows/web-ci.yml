@@ -36,8 +36,12 @@ jobs:
           rm -f package-lock.json web/package-lock.json
           npm install --no-audit --no-fund
 
-      - name: Type check
-        run: npx tsc --noEmit
+      # Run the real production build, not just `tsc --noEmit`. The build
+      # uses `tsc -b` (project references) which catches type errors the
+      # root `--noEmit` config misses — e.g. JSX intrinsic collisions and
+      # test-file type drift that would otherwise block a release build.
+      - name: Build
+        run: npm run build
 
       - name: Lint
         run: npm run lint
