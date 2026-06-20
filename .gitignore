@@ -6,6 +6,11 @@ dist/
 dist-ssr/
 sdk/build/
 
+# Test artifacts
+web/test-results/
+web/playwright-report/
+web/probe*.mjs
+
 # Logs
 *.log
 npm-debug.log*
