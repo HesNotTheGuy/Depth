@@ -89,6 +89,30 @@ The web app is the fastest way to try the idea. The C++ SDK is the production-gr
 
 ## Building
 
+### Prerequisites
+
+- **Node.js 20+** and npm (web app, Electron, Figma plugin)
+- **CMake 3.20+** and a **C++20** compiler — GCC, Clang, or MSVC (only needed for the SDK, the native sidecar, and the desktop build)
+
+### Fresh clone
+
+This repo is an npm workspace, so one install at the root covers the web app, the Electron shell, and the Figma plugin:
+
+```bash
+git clone https://github.com/HesNotTheGuy/Depth.git
+cd Depth
+npm install            # installs web + electron + figma-plugin
+```
+
+Common root scripts (see [`package.json`](./package.json)):
+
+```bash
+npm run dev            # web dev server + Electron together
+npm run build          # web build + native sidecar + Electron (needs CMake)
+```
+
+The per-area commands below still work for focused work.
+
 ### SDK
 
 ```bash
