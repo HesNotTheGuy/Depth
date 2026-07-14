@@ -39,7 +39,10 @@ const SECTIONS: Section[] = [
     shortcuts: [
       { label: 'Nudge position', keys: ['←', '→', '↑', '↓'] },
       { label: 'Nudge position (large)', keys: ['Shift', '←/→/↑/↓'] },
-      { label: 'Reset rotation', keys: ['R'] },
+      { label: 'Gizmo: move', keys: ['W'] },
+      { label: 'Gizmo: rotate', keys: ['E'] },
+      { label: 'Gizmo: scale', keys: ['R'] },
+      { label: 'Reset rotation', keys: ['Shift', 'R'] },
       { label: 'Reset position', keys: ['0'] },
     ],
   },

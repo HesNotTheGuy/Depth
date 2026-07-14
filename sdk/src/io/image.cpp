@@ -78,7 +78,7 @@ Image Image::load(const std::string& path, Status* status) {
     img.width_ = static_cast<uint32_t>(w);
     img.height_ = static_cast<uint32_t>(h);
     img.format_ = PixelFormat::RGBA8;
-    img.pixels_.assign(data, data + (w * h * 4));
+    img.pixels_.assign(data, data + (static_cast<size_t>(w) * h * 4));
     stbi_image_free(data);
 
     if (status) *status = Status::Ok;
@@ -98,7 +98,7 @@ Image Image::load_from_memory(const uint8_t* data, size_t size, Status* status) 
     img.width_ = static_cast<uint32_t>(w);
     img.height_ = static_cast<uint32_t>(h);
     img.format_ = PixelFormat::RGBA8;
-    img.pixels_.assign(pixels, pixels + (w * h * 4));
+    img.pixels_.assign(pixels, pixels + (static_cast<size_t>(w) * h * 4));
     stbi_image_free(pixels);
 
     if (status) *status = Status::Ok;

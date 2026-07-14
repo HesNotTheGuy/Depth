@@ -153,8 +153,9 @@ export function useKeyboardShortcuts() {
         return;
       }
 
-      // R — reset rotation
-      if (lowerKey === 'r' && !e.shiftKey) {
+      // Shift+R — reset rotation. Plain R is taken by the gizmo scale mode
+      // (see CompositeViewport), so the reset lives on the shifted key.
+      if (lowerKey === 'r' && e.shiftKey) {
         if (!selectedId) return;
         e.preventDefault();
         updateSelected({ rotation: { x: 0, y: 0, z: 0 } });

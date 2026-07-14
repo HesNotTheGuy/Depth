@@ -28,6 +28,19 @@ export interface EstimatedLighting {
 export function estimateLighting(imageDataUrl: string): Promise<EstimatedLighting> {
   return new Promise((resolve) => {
     const img = new Image();
+    // If the image fails to decode, fall back to neutral defaults (matching
+    // the store's initial lighting) instead of leaving the promise pending.
+    img.onerror = () => {
+      resolve({
+        brightness: 1.0,
+        colorTemp: '#ffffff',
+        lightAngle: 45,
+        lightElevation: 0.6,
+        ambientColor: '#808080',
+        contrast: 0.5,
+        detectedLights: [],
+      });
+    };
     img.onload = () => {
       const canvas = document.createElement('canvas');
       const size = 128; // downsample for speed

@@ -119,6 +119,13 @@ public:
             return val::null();
         }
 
+        /* The composite is sized to the background, which may differ from the
+           requested dimensions. The contract is a width*height*4 buffer, so a
+           mismatch must fail rather than read past the smaller allocation. */
+        if (result.width() != width || result.height() != height) {
+            return val::null();
+        }
+
         size_t bytes = static_cast<size_t>(width) * height * 4;
         return val(typed_memory_view(bytes, result.data())).call<val>("slice");
     }

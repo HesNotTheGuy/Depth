@@ -221,7 +221,8 @@ export function CompositeViewport() {
         const tag = target.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) return;
       }
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Shift+R is "reset rotation" (useKeyboardShortcuts) — leave shifted keys alone
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (e.key === 'w' || e.key === 'W') setGizmoMode('translate');
       else if (e.key === 'e' || e.key === 'E') setGizmoMode('rotate');
       else if (e.key === 'r' || e.key === 'R') setGizmoMode('scale');

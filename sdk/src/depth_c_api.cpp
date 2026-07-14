@@ -124,6 +124,11 @@ uint8_t* depth_wasm_render(void* scene, uint32_t width, uint32_t height) {
 
     if (result.empty()) return nullptr;
 
+    /* The composite is sized to the background, which may differ from the
+       requested dimensions. The contract is a width*height*4 buffer, so a
+       mismatch must fail rather than read past the smaller allocation. */
+    if (result.width() != width || result.height() != height) return nullptr;
+
     /* Copy pixel data to a new heap allocation the caller owns */
     size_t bytes = static_cast<size_t>(width) * height * 4;
     auto* out = new uint8_t[bytes];
