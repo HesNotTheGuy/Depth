@@ -59,7 +59,9 @@ function createWindow(): void {
   });
 
   const entry = resolveRendererEntry();
-  mainWindow.loadFile(entry).catch((err) => {
+  // Open the editor directly. Hash routing is required under file:// —
+  // see web/src/main.tsx which switches to HashRouter for that protocol.
+  mainWindow.loadFile(entry, { hash: '/app' }).catch((err) => {
     console.error('[main] Failed to load renderer entry:', entry, err);
   });
 

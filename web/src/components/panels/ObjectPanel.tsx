@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useSceneStore, type ObjectPreset } from '../../store/useSceneStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
-import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen, Plus, Eye, EyeOff, Trash2, Copy } from 'lucide-react';
+import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen, Plus, Eye, EyeOff, Trash2, Copy, CircleDot } from 'lucide-react';
 import { SliderInput, Vec3SliderInput } from '../ui/SliderInput';
 
 const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
@@ -18,7 +18,7 @@ const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'bottle', label: 'Bottle', icon: <Wine size={18} /> },
   { id: 'bag', label: 'Bag', icon: <ShoppingBag size={18} /> },
   { id: 'card', label: 'Card', icon: <CreditCard size={18} /> },
-  { id: 'donut', label: 'Donut', icon: <span className="text-base leading-none">🍩</span> },
+  { id: 'donut', label: 'Donut', icon: <CircleDot size={18} /> },
   { id: 'laptop', label: 'Laptop', icon: <Laptop size={18} /> },
   { id: 'tablet', label: 'Tablet', icon: <Tablet size={18} /> },
   { id: 'can', label: 'Can', icon: <CupSoda size={18} /> },
@@ -51,11 +51,14 @@ export function ObjectPanel() {
       if (!file) return;
       const url = URL.createObjectURL(file);
       if (selected) {
+        if (selected.customModelUrl) URL.revokeObjectURL(selected.customModelUrl);
         updateSelected({ type: 'custom', customModelUrl: url });
       } else {
         const id = addObject('custom');
         useSceneStore.getState().updateObject(id, { customModelUrl: url });
       }
+      // Allow re-selecting the same file.
+      e.target.value = '';
     },
     [selected, updateSelected, addObject]
   );
@@ -68,7 +71,8 @@ export function ObjectPanel() {
 
   const addPresetButton = (preset: ObjectPreset) => {
     if (selected) {
-      updateSelected({ type: preset });
+      if (selected.customModelUrl) URL.revokeObjectURL(selected.customModelUrl);
+      updateSelected({ type: preset, customModelUrl: null });
     } else {
       addObject(preset);
     }
@@ -129,7 +133,11 @@ export function ObjectPanel() {
                 <Copy size={12} />
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); removeObject(o.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (o.customModelUrl) URL.revokeObjectURL(o.customModelUrl);
+                  removeObject(o.id);
+                }}
                 className="p-1 rounded hover:bg-white/10 text-text-muted hover:text-red-400 transition-colors"
                 title="Delete"
                 aria-label={`Delete ${o.name}`}

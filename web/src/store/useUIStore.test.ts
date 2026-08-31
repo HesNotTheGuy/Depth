@@ -12,6 +12,7 @@ beforeEach(() => {
     drawingPoints: [],
     canvasZoom: 1,
     canvasPan: { x: 0, y: 0 },
+    fitRequestId: 0,
     gizmoMode: 'translate',
     showShortcuts: false,
   }, false);
@@ -34,11 +35,13 @@ describe('useUIStore canvas zoom/pan', () => {
     expect(useUIStore.getState().canvasPan).toEqual({ x: 50, y: -20 });
   });
 
-  it('fitToScreen resets zoom and pan', () => {
+  it('fitToScreen bumps fitRequestId and resets zoom/pan as fallback', () => {
     useUIStore.getState().setCanvasZoom(3);
     useUIStore.getState().setCanvasPan({ x: 100, y: 100 });
+    const before = useUIStore.getState().fitRequestId;
     useUIStore.getState().fitToScreen();
     const s = useUIStore.getState();
+    expect(s.fitRequestId).toBe(before + 1);
     expect(s.canvasZoom).toBe(1);
     expect(s.canvasPan).toEqual({ x: 0, y: 0 });
   });

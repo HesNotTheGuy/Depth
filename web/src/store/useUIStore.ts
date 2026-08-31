@@ -17,6 +17,8 @@ interface UIState {
   // Canvas zoom/pan
   canvasZoom: number;      // 1 = 100%, 0.5 = 50%, 2 = 200%
   canvasPan: { x: number; y: number }; // offset in pixels
+  /** Bumped by fitToScreen(); CompositeViewport listens and computes aspect-fit. */
+  fitRequestId: number;
 
   // Transform gizmo
   gizmoMode: GizmoMode;
@@ -52,6 +54,7 @@ export const useUIStore = create<UIState>((set) => ({
   drawingPoints: [],
   canvasZoom: 1,
   canvasPan: { x: 0, y: 0 },
+  fitRequestId: 0,
   gizmoMode: 'translate',
   showShortcuts: false,
   isPickingColor: false,
@@ -70,7 +73,14 @@ export const useUIStore = create<UIState>((set) => ({
   finishDrawing: () => set({ isDrawing: false, drawingPoints: [] }),
   setCanvasZoom: (zoom) => set({ canvasZoom: Math.max(0.1, Math.min(5, zoom)) }),
   setCanvasPan: (pan) => set({ canvasPan: pan }),
-  fitToScreen: () => set({ canvasZoom: 1, canvasPan: { x: 0, y: 0 } }),
+  // Viewport owns the real aspect-fit math; this just signals a request.
+  // Fallback reset keeps Ctrl+0 useful before the image has loaded.
+  fitToScreen: () =>
+    set((s) => ({
+      fitRequestId: s.fitRequestId + 1,
+      canvasZoom: 1,
+      canvasPan: { x: 0, y: 0 },
+    })),
   setGizmoMode: (mode) => set({ gizmoMode: mode }),
   setShowShortcuts: (show) => set({ showShortcuts: show }),
   setPickingColor: (v) => set({ isPickingColor: v }),

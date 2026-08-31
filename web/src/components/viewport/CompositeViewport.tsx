@@ -170,7 +170,7 @@ export function CompositeViewport() {
   const canvasPan = useUIStore((s) => s.canvasPan);
   const setCanvasZoom = useUIStore((s) => s.setCanvasZoom);
   const setCanvasPan = useUIStore((s) => s.setCanvasPan);
-  const fitToScreen = useUIStore((s) => s.fitToScreen);
+  const fitRequestId = useUIStore((s) => s.fitRequestId);
   const gizmoMode = useUIStore((s) => s.gizmoMode);
   const setGizmoMode = useUIStore((s) => s.setGizmoMode);
   const isPickingColor = useUIStore((s) => s.isPickingColor);
@@ -288,16 +288,28 @@ export function CompositeViewport() {
     isPanning.current = false;
   }, []);
 
-  // Fit to screen handler
+  // Fit to screen handler — shared by the Fit button and Ctrl+0 (via fitRequestId).
   const handleFit = useCallback(() => {
-    if (!imageSize || !containerRef.current) { fitToScreen(); return; }
+    if (!imageSize || !containerRef.current) {
+      setCanvasZoom(1);
+      setCanvasPan({ x: 0, y: 0 });
+      return;
+    }
     const rect = containerRef.current.getBoundingClientRect();
     const scaleX = rect.width / imageSize.w;
     const scaleY = rect.height / imageSize.h;
     const fit = Math.min(scaleX, scaleY) * 0.95;
     setCanvasZoom(fit);
     setCanvasPan({ x: 0, y: 0 });
-  }, [imageSize, setCanvasZoom, setCanvasPan, fitToScreen]);
+  }, [imageSize, setCanvasZoom, setCanvasPan]);
+
+  // Respond to store-driven fit requests (keyboard shortcut Ctrl+0).
+  const lastFitRequest = useRef(0);
+  useEffect(() => {
+    if (fitRequestId === 0 || fitRequestId === lastFitRequest.current) return;
+    lastFitRequest.current = fitRequestId;
+    handleFit();
+  }, [fitRequestId, handleFit]);
 
   // Auto-dismiss the toast after 2.5s
   useEffect(() => {
