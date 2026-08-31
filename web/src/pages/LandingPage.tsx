@@ -2,17 +2,17 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Upload,
-  Grid3X3,
-  Download,
   Sun,
+  Box,
+  Download,
   Palette,
+  Layers,
   Smartphone,
-  Image,
-  Eclipse,
-  FileDown,
   ArrowRight,
   ChevronDown,
 } from 'lucide-react';
+
+const GITHUB_URL = 'https://github.com/HesNotTheGuy/Depth';
 
 function GithubIcon({ size = 18, className = '' }: { size?: number; className?: string }) {
   return (
@@ -28,9 +28,6 @@ function GithubIcon({ size = 18, className = '' }: { size?: number; className?: 
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Intersection Observer hook for fade-in-on-scroll                  */
-/* ------------------------------------------------------------------ */
 function useFadeIn() {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -45,7 +42,7 @@ function useFadeIn() {
           observer.unobserve(el);
         }
       },
-      { threshold: 0.15 },
+      { threshold: 0.12 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -54,7 +51,11 @@ function useFadeIn() {
   return ref;
 }
 
-function FadeIn({ children, className = '', delay = 0 }: {
+function FadeIn({
+  children,
+  className = '',
+  delay = 0,
+}: {
   children: React.ReactNode;
   className?: string;
   delay?: number;
@@ -71,119 +72,54 @@ function FadeIn({ children, className = '', delay = 0 }: {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Hero 3D-ish visual (pure CSS/SVG - no heavy deps)                 */
-/* ------------------------------------------------------------------ */
-function HeroVisual() {
-  return (
-    <div className="relative w-full max-w-[520px] mx-auto aspect-square select-none">
-      {/* Glow backdrop */}
-      <div className="absolute inset-0 rounded-full bg-primary/10 blur-[100px]" />
-
-      {/* Floating shapes */}
-      <div className="absolute inset-0">
-        {/* Main "card" */}
-        <div
-          className="absolute top-[18%] left-[12%] w-[76%] h-[56%] rounded-2xl border border-panel-border bg-surface-raised/80 backdrop-blur-sm shadow-2xl overflow-hidden"
-          style={{ transform: 'perspective(800px) rotateY(-4deg) rotateX(2deg)' }}
-        >
-          {/* Fake image grid */}
-          <div className="absolute inset-3 grid grid-cols-3 gap-2 opacity-40">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-lg bg-white/5" />
-            ))}
-          </div>
-          {/* Label overlay */}
-          <div className="absolute bottom-4 left-4 right-4 flex items-center gap-2">
-            <div className="h-2 w-16 rounded-full bg-primary/50" />
-            <div className="h-2 w-10 rounded-full bg-accent/40" />
-          </div>
-        </div>
-
-        {/* Floating mug mockup */}
-        <div
-          className="absolute bottom-[12%] right-[6%] w-24 h-28 rounded-xl border border-primary/20 bg-surface-overlay/90 backdrop-blur shadow-lg animate-drift-1"
-          style={{ animationDuration: '14s' }}
-        >
-          <div className="flex items-center justify-center h-full">
-            <div className="w-10 h-12 rounded-md bg-primary/20 border border-primary/30" />
-          </div>
-        </div>
-
-        {/* Floating phone outline */}
-        <div
-          className="absolute top-[8%] right-[14%] w-14 h-24 rounded-xl border border-accent/25 bg-surface-overlay/60 backdrop-blur shadow-lg animate-drift-2"
-          style={{ animationDuration: '18s' }}
-        >
-          <div className="mt-2 mx-auto w-6 h-1 rounded-full bg-accent/30" />
-        </div>
-
-        {/* Small accent dot */}
-        <div className="absolute bottom-[28%] left-[8%] w-4 h-4 rounded-full bg-primary/40 animate-drift-3" style={{ animationDuration: '10s' }} />
-        <div className="absolute top-[36%] right-[4%] w-3 h-3 rounded-full bg-accent/30 animate-drift-2" style={{ animationDuration: '12s' }} />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Steps section                                                     */
-/* ------------------------------------------------------------------ */
 const STEPS = [
   {
     icon: Upload,
-    title: 'Upload your background',
-    desc: 'Drop any photo. JPEG, PNG, or WebP.',
+    title: 'Drop in a photo',
+    desc: 'Lighting and a floor surface are inferred automatically.',
   },
   {
-    icon: Grid3X3,
-    title: 'Choose a mockup',
-    desc: 'Mug, phone, bottle, bag, card, and more.',
+    icon: Box,
+    title: 'Drop your product in',
+    desc: 'Pick a mockup or upload a 3D model — it lands on the surface.',
   },
   {
-    icon: Download,
-    title: 'Export your composite',
-    desc: 'PNG with transparency. Ready for Photoshop or Figma.',
+    icon: Sun,
+    title: 'The lighting just matches',
+    desc: 'Direction, color, and shadows follow the scene. Tweak if you want.',
   },
 ] as const;
 
-/* ------------------------------------------------------------------ */
-/*  Feature grid items                                                */
-/* ------------------------------------------------------------------ */
 const FEATURES = [
-  { icon: Sun, title: 'Smart Lighting', desc: 'Auto-matches lighting from your photo' },
-  { icon: Palette, title: 'Material Library', desc: 'Glass, metal, matte, plastic, glossy' },
-  { icon: Smartphone, title: 'Mockup Presets', desc: 'Mug, phone, bottle, bag, card' },
-  { icon: Image, title: 'Texture Mapping', desc: 'Upload labels and logos' },
-  { icon: Eclipse, title: 'Shadow Control', desc: 'Adjustable softness, color, opacity' },
-  { icon: FileDown, title: 'One-click Export', desc: 'PNG layers for Photoshop / Figma' },
+  { icon: Sun, title: 'Auto lighting', desc: 'Estimates direction, brightness, and color from your plate' },
+  { icon: Smartphone, title: 'PNG on mockups', desc: 'Drop a screen design onto phone, tablet, or laptop' },
+  { icon: Layers, title: 'Assumed surfaces', desc: 'Floor inferred on upload; draw desks and shelves to refine' },
+  { icon: Palette, title: 'Materials', desc: 'Matte, metal, glass, wood, marble, fabric, leather' },
+  { icon: Download, title: 'Clean export', desc: 'PNG at 1× / 2× / 4×, or layered passes for Photoshop' },
 ] as const;
 
-/* ------------------------------------------------------------------ */
-/*  SDK code snippet                                                  */
-/* ------------------------------------------------------------------ */
-/** Escape HTML metacharacters so syntax-highlight regexes can safely produce
- *  HTML wrapping without ever leaking raw markup from the source string. */
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+/** Matches the real C++ API in sdk/include/depth — keep this honest. */
 const CODE_SNIPPET = `#include <depth/depth.h>
+using namespace depth;
 
-depth::Scene scene;
-scene.set_background(depth::Image::load("photo.jpg"));
+Scene scene;
+auto bg = Image::load("photo.jpg");
+scene.set_background(bg);
+scene.apply_lighting_estimate(estimate_lighting(bg));
 
-auto& obj = scene.add_mesh(depth::Mesh::preset("mug"));
-obj.set_material({ .roughness = 0.3f, .metallic = 0.0f });
-obj.apply_texture(depth::Image::load("logo.png"));
+SceneObject obj;
+obj.geometry = GeometryType::Box;
+obj.transform.position = {0, 0.5f, 0};
+obj.material = Material::from_preset(MaterialPreset::Metallic);
+scene.add_object(obj);
 
-depth::Renderer renderer;
-auto result = renderer.render(scene, { 1920, 1080 });
-result.save("output.png");`;
+auto renderer = Renderer::create();
+render_composite(*renderer, scene).save("output.png");`;
 
-/* ------------------------------------------------------------------ */
-/*  Main landing page                                                 */
-/* ------------------------------------------------------------------ */
 export function LandingPage() {
   const navigate = useNavigate();
 
@@ -195,168 +131,163 @@ export function LandingPage() {
 
   return (
     <div className="landing-root">
-      {/* ---- Nav ---- */}
-      <nav className="fixed top-0 inset-x-0 z-50 h-16 flex items-center justify-between px-6 md:px-12 bg-[#0A0A0F]/80 backdrop-blur-md border-b border-panel-border">
-        <span className="text-lg font-semibold tracking-tight text-text-primary">
-          Depth
-        </span>
-        <div className="flex items-center gap-4">
+      <nav className="landing-nav">
+        <span className="landing-brand">Depth</span>
+        <div className="flex items-center gap-3">
           <a
-            href="https://github.com"
+            href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
-            className="text-text-secondary hover:text-text-primary transition-colors"
+            className="text-text-secondary hover:text-text-primary transition-colors p-2"
+            aria-label="GitHub repository"
           >
             <GithubIcon size={18} />
           </a>
-          <button
-            onClick={goToApp}
-            className="px-4 py-1.5 text-sm font-medium rounded-lg bg-primary hover:bg-primary-hover text-white transition-colors"
-          >
+          <button type="button" onClick={goToApp} className="landing-nav-cta">
             Open App
           </button>
         </div>
       </nav>
 
-      {/* ---- Hero ---- */}
-      <section className="relative min-h-screen flex flex-col items-center justify-center px-6 pt-16">
-        {/* Background glow */}
-        <div className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-primary/[0.07] rounded-full blur-[120px]" />
+      {/* Hero — one composition: brand, pitch, CTA, dominant product shot */}
+      <section className="landing-hero">
+        <div className="landing-hero-visual" aria-hidden="true">
+          <img
+            src="/screenshots/editor.png"
+            alt=""
+            className="landing-hero-image"
+            width={1440}
+            height={900}
+          />
+        </div>
 
-        <FadeIn className="text-center max-w-3xl mx-auto z-10">
-          <h1 className="text-6xl sm:text-7xl md:text-8xl font-bold tracking-tighter bg-gradient-to-b from-white to-text-secondary bg-clip-text text-transparent pb-2">
-            Depth
-          </h1>
-          <p className="mt-6 text-xl sm:text-2xl font-medium text-text-primary leading-snug">
-            Turn any photo into a 3D product mockup in 30 seconds
+        <div className="landing-hero-copy">
+          <h1 className="landing-hero-brand">Depth</h1>
+          <p className="landing-hero-tagline">
+            Drop in a photo. Place a 3D object. The lighting just matches.
           </p>
-          <p className="mt-4 text-base sm:text-lg text-text-secondary max-w-xl mx-auto leading-relaxed">
-            No 3D experience needed. Upload a photo, pick a shape, export.
+          <p className="landing-hero-sub">
+            Drop a photo, drop a product — it lands on the surface with matching light.
           </p>
-
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <button
-              onClick={goToApp}
-              className="group flex items-center gap-2 px-8 py-3 text-base font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]"
-            >
+          <div className="landing-hero-actions">
+            <button type="button" onClick={goToApp} className="landing-cta-primary group">
               Try it now
               <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" />
             </button>
-            <button
-              onClick={scrollToHow}
-              className="flex items-center gap-1.5 px-6 py-3 text-base font-medium rounded-xl text-text-secondary hover:text-text-primary border border-panel-border hover:border-white/10 transition-colors"
-            >
+            <button type="button" onClick={scrollToHow} className="landing-cta-secondary">
               See how it works
               <ChevronDown size={16} />
             </button>
           </div>
-        </FadeIn>
-
-        <FadeIn className="mt-12 z-10 w-full max-w-2xl" delay={200}>
-          <HeroVisual />
-        </FadeIn>
+        </div>
       </section>
 
-      {/* ---- How it works ---- */}
-      <section id="how-it-works" className="py-32 px-6">
-        <FadeIn className="text-center mb-16">
-          <p className="text-sm font-semibold uppercase tracking-widest text-primary mb-3">How it works</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-text-primary">Three steps. That's it.</h2>
+      <section id="how-it-works" className="landing-section">
+        <FadeIn className="landing-section-head">
+          <p className="landing-eyebrow">How it works</p>
+          <h2 className="landing-h2">Three steps. That&apos;s the whole product.</h2>
         </FadeIn>
 
-        <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="landing-steps">
           {STEPS.map((step, i) => (
-            <FadeIn key={step.title} delay={i * 120}>
-              <div className="relative group flex flex-col items-center text-center p-8 rounded-2xl border border-panel-border bg-surface-raised/50 hover:border-primary/20 transition-colors">
-                <span className="absolute -top-3.5 left-6 text-xs font-bold text-text-muted bg-surface px-2">
-                  0{i + 1}
-                </span>
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center mb-5 group-hover:bg-primary/15 transition-colors">
-                  <step.icon size={22} className="text-primary" />
-                </div>
-                <h3 className="text-lg font-semibold text-text-primary mb-2">{step.title}</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">{step.desc}</p>
+            <FadeIn key={step.title} delay={i * 100}>
+              <div className="landing-step">
+                <span className="landing-step-num">0{i + 1}</span>
+                <step.icon size={22} className="text-primary mb-4" strokeWidth={1.5} />
+                <h3 className="landing-step-title">{step.title}</h3>
+                <p className="landing-step-desc">{step.desc}</p>
               </div>
             </FadeIn>
           ))}
         </div>
       </section>
 
-      {/* ---- Features ---- */}
-      <section className="py-32 px-6">
-        <FadeIn className="text-center mb-16">
-          <p className="text-sm font-semibold uppercase tracking-widest text-accent mb-3">Features</p>
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-text-primary">Everything you need, nothing you don't</h2>
+      <section className="landing-section landing-section-tight">
+        <FadeIn className="landing-section-head">
+          <p className="landing-eyebrow">In the app</p>
+          <h2 className="landing-h2">Lighting, materials, and surfaces — without a 3D degree</h2>
         </FadeIn>
 
-        <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="landing-shot-grid">
+          <FadeIn delay={60}>
+            <figure className="landing-shot">
+              <img src="/screenshots/lighting.png" alt="Lighting panel matching a scene" />
+              <figcaption>Auto-matched lighting you can still fine-tune</figcaption>
+            </figure>
+          </FadeIn>
+          <FadeIn delay={140}>
+            <figure className="landing-shot">
+              <img src="/screenshots/materials.png" alt="Material presets in the editor" />
+              <figcaption>Material presets from matte plastic to glass</figcaption>
+            </figure>
+          </FadeIn>
+          <FadeIn delay={220}>
+            <figure className="landing-shot">
+              <img src="/screenshots/surfaces.png" alt="Surface planes drawn on a photo" />
+              <figcaption>Draw surfaces so objects sit on the desk</figcaption>
+            </figure>
+          </FadeIn>
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <FadeIn className="landing-section-head">
+          <p className="landing-eyebrow">Features</p>
+          <h2 className="landing-h2">Everything you need for a believable composite</h2>
+        </FadeIn>
+
+        <div className="landing-features">
           {FEATURES.map((feat, i) => (
-            <FadeIn key={feat.title} delay={i * 80}>
-              <div className="p-6 rounded-2xl border border-panel-border bg-surface-raised/40 hover:border-primary/15 transition-colors group">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-4 group-hover:bg-primary/15 transition-colors">
-                  <feat.icon size={18} className="text-primary" />
-                </div>
-                <h3 className="text-base font-semibold text-text-primary mb-1">{feat.title}</h3>
-                <p className="text-sm text-text-secondary leading-relaxed">{feat.desc}</p>
+            <FadeIn key={feat.title} delay={i * 70}>
+              <div className="landing-feature">
+                <feat.icon size={18} className="text-primary mb-3" strokeWidth={1.5} />
+                <h3 className="landing-feature-title">{feat.title}</h3>
+                <p className="landing-feature-desc">{feat.desc}</p>
               </div>
             </FadeIn>
           ))}
         </div>
       </section>
 
-      {/* ---- For developers ---- */}
-      <section className="py-32 px-6">
-        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <section className="landing-section">
+        <div className="landing-dev">
           <FadeIn>
-            <p className="text-sm font-semibold uppercase tracking-widest text-accent mb-3">For developers</p>
-            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-text-primary mb-6">
-              Powered by a zero-dependency C++ engine
+            <p className="landing-eyebrow">For developers</p>
+            <h2 className="landing-h2 mb-5">
+              Same idea as a zero-dependency C++ SDK
             </h2>
-            <p className="text-text-secondary leading-relaxed mb-4">
-              12K lines. Embeds anywhere. WebAssembly ready. The Depth SDK gives you full
-              programmatic control over the compositing pipeline — lighting, materials,
-              meshes, and rendering — with no external dependencies.
+            <p className="landing-dev-copy">
+              The web app is the fastest way to try the workflow. The Depth SDK is the
+              embeddable engine — lighting estimation, surface planes, software
+              rasterizer, and compositing — with a flat C API for FFI.
             </p>
-            <div className="flex items-center gap-6 text-sm text-text-muted">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-accent" />
-                C++ 17
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-primary" />
-                Zero deps
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-success" />
-                WASM ready
-              </span>
+            <div className="landing-dev-meta">
+              <span>C++20</span>
+              <span>Zero runtime deps</span>
+              <span>~5K LOC</span>
             </div>
           </FadeIn>
 
-          <FadeIn delay={150}>
-            <div className="rounded-2xl border border-panel-border bg-[#0D0D14] overflow-hidden">
-              <div className="flex items-center gap-1.5 px-4 py-3 border-b border-panel-border">
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-green-500/60" />
-                <span className="ml-3 text-xs text-text-muted font-mono">main.cpp</span>
+          <FadeIn delay={120}>
+            <div className="landing-code">
+              <div className="landing-code-bar">
+                <span className="landing-code-dot" />
+                <span className="landing-code-dot" />
+                <span className="landing-code-dot" />
+                <span className="landing-code-file">main.cpp</span>
               </div>
-              <pre className="p-5 text-[13px] leading-relaxed overflow-x-auto font-mono">
-                <code className="text-text-secondary">
+              <pre className="landing-code-pre">
+                <code>
                   {CODE_SNIPPET.split('\n').map((line, i) => {
-                    // Simple syntax highlighting. Escape first so the regex
-                    // replacements operate on safe content; the `<` / `>` in
-                    // `#include <…>` become `&lt;` / `&gt;` so we match those.
                     const highlighted = escapeHtml(line)
                       .replace(/(#include\s+&lt;[^&]+&gt;)/g, '<span class="text-accent">$1</span>')
-                      .replace(/(depth::\w+)/g, '<span class="text-primary">$1</span>')
+                      .replace(/(depth::\w+|using namespace depth)/g, '<span class="text-primary">$1</span>')
                       .replace(/(".*?")/g, '<span class="text-green-400">$1</span>')
                       .replace(/(\/\/.*)/g, '<span class="text-text-muted">$1</span>')
-                      .replace(/(\.\w+\s*=)/g, '<span class="text-yellow-300/80">$1</span>')
-                      .replace(/(auto|float)/g, '<span class="text-orange-300/80">$1</span>');
+                      .replace(/(auto|float|using|namespace)/g, '<span class="text-orange-300/80">$1</span>');
                     return (
                       <span key={i}>
-                        <span className="inline-block w-8 text-right mr-4 text-text-muted/40 select-none">{i + 1}</span>
+                        <span className="landing-code-ln">{i + 1}</span>
                         <span dangerouslySetInnerHTML={{ __html: highlighted }} />
                         {'\n'}
                       </span>
@@ -369,43 +300,30 @@ export function LandingPage() {
         </div>
       </section>
 
-      {/* ---- CTA ---- */}
-      <section className="py-32 px-6">
+      <section className="landing-section landing-cta-block">
         <FadeIn className="text-center">
-          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-text-primary mb-4">
-            Ready to try it?
-          </h2>
+          <h2 className="landing-h2 mb-4">Ready to match the lighting?</h2>
           <p className="text-text-secondary mb-8 max-w-md mx-auto">
-            Upload a photo, pick a mockup, and export a production-ready composite. No signup required.
+            Upload a photo, place a mockup, export. Runs locally in your browser — no signup.
           </p>
-          <button
-            onClick={goToApp}
-            className="group inline-flex items-center gap-2 px-8 py-3.5 text-base font-semibold rounded-xl bg-primary hover:bg-primary-hover text-white shadow-lg shadow-primary/20 transition-all hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98]"
-          >
+          <button type="button" onClick={goToApp} className="landing-cta-primary group inline-flex">
             Launch Depth
             <ArrowRight size={18} className="transition-transform group-hover:translate-x-0.5" />
           </button>
         </FadeIn>
       </section>
 
-      {/* ---- Footer ---- */}
-      <footer className="border-t border-panel-border py-10 px-6">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <span className="text-sm text-text-muted">
-            Built with Depth SDK
-          </span>
-          <div className="flex items-center gap-6">
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5"
-            >
-              <GithubIcon size={14} />
-              GitHub
-            </a>
-          </div>
-        </div>
+      <footer className="landing-footer">
+        <span className="text-sm text-text-muted">Depth — 3D compositing for 2D images</span>
+        <a
+          href={GITHUB_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm text-text-secondary hover:text-text-primary transition-colors flex items-center gap-1.5"
+        >
+          <GithubIcon size={14} />
+          GitHub
+        </a>
       </footer>
     </div>
   );

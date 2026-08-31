@@ -65,6 +65,17 @@ async function synthesizeColorPng(page: Page, color: string, size = 128): Promis
   return Buffer.from(arr);
 }
 
+/** Click a mockup preset button. Featured Image/Phone sit above the fold;
+ *  force avoids flaky overflow clipping inside the scrollable sidebar. */
+async function clickMockupPreset(page: Page, label: string) {
+  await page.getByRole('button', { name: /^object$/i }).click();
+  // Ensure an object is selected so the Mockups grid is mounted.
+  await expect.poll(async () => (await readStore(page)).selectedObjectId).toBeTruthy();
+  const btn = page.getByRole('button', { name: label, exact: true }).first();
+  await btn.scrollIntoViewIfNeeded();
+  await btn.click({ force: true });
+}
+
 /** Common setup: open /app, upload bg, dismiss matched screen. */
 async function openEditor(page: Page): Promise<void> {
   await page.goto('/app');
@@ -77,7 +88,7 @@ async function openEditor(page: Page): Promise<void> {
     buffer: bg,
   });
 
-  await expect(page.getByText('Lighting matched')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/ready — lighting/i)).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /continue/i }).click();
 
   // Sidebar visible = editor mounted.
@@ -135,42 +146,26 @@ test.describe('Use cases', () => {
   test('1. Phone mockup with screen image, exported as PNG', async ({ page }) => {
     await openEditor(page);
 
-    // Object tab is the default, but click it to be explicit.
-    await page.getByRole('button', { name: /^object$/i }).click();
-
-    // "Phone" is rendered as a button with title="Phone" inside the Mockups grid.
-    // The default selected object is a Cube — clicking Phone mutates its type.
-    await page.getByRole('button', { name: 'Phone', exact: true }).first().click();
-
-    // Confirm the store actually changed type to phone.
+    await clickMockupPreset(page, 'Phone');
     await expect.poll(async () => (await readStore(page)).objects[0]?.type).toBe('phone');
 
-    // Switch to Material tab.
+    // Material tab — screen PNG is the primary path for phone mockups.
     await page.getByRole('button', { name: /^material$/i }).click();
 
-    // The "Face Placement" label is always present. With no face selected the
-    // panel shows hint text — we drive selection through the store rather than
-    // trying to click a specific face on the 3D canvas (3D hit-testing in
-    // headless chromium is flaky).
-    await expect(page.getByText(/face placement/i)).toBeVisible();
-    await setStore(page, { selectedFace: 'front' });
-    await expect(page.getByText(/Selected: front/i)).toBeVisible();
-
-    // Inject the face texture via the dedicated hidden input.
     const tex = await synthesizeColorPng(page, '#22c55e');
-    await page.locator('[data-testid="face-texture-input"]').setInputFiles({
+    await page.locator('[data-testid="screen-texture-input"]').setInputFiles({
       name: 'screen.png',
       mimeType: 'image/png',
       buffer: tex,
     });
 
-    // Assert the face texture made it into the store.
+    // Assert the screen texture made it into faceTextures.front (and global texture).
     await expect
       .poll(async () => {
         const s = await readStore(page);
-        return Object.keys(s.objects[0]?.faceTextures ?? {}).length;
+        return s.objects[0]?.faceTextures?.front?.url ?? '';
       }, { timeout: 5000 })
-      .toBeGreaterThan(0);
+      .toMatch(/^data:image\//);
 
     // Export tab + PNG export.
     await page.getByRole('button', { name: /^export$/i }).first().click();
@@ -185,11 +180,31 @@ test.describe('Use cases', () => {
     expect(download.suggestedFilename()).toMatch(/\.png$/);
   });
 
-  test('2. Mug mockup with a global logo texture', async ({ page }) => {
+  test('1b. Flat PNG image plate via Add PNG', async ({ page }) => {
     await openEditor(page);
 
     await page.getByRole('button', { name: /^object$/i }).click();
-    await page.getByRole('button', { name: 'Mug', exact: true }).first().click();
+
+    const art = await synthesizeColorPng(page, '#f59e0b');
+    await page.locator('[data-testid="png-mockup-input"]').setInputFiles({
+      name: 'mockup-art.png',
+      mimeType: 'image/png',
+      buffer: art,
+    });
+
+    await expect
+      .poll(async () => {
+        const s = await readStore(page);
+        const img = s.objects.find((o) => o.type === 'image');
+        return img?.texture ?? '';
+      }, { timeout: 5000 })
+      .toMatch(/^data:image\//);
+  });
+
+  test('2. Mug mockup with a global logo texture', async ({ page }) => {
+    await openEditor(page);
+
+    await clickMockupPreset(page, 'Mug');
     await expect.poll(async () => (await readStore(page)).objects[0]?.type).toBe('mug');
 
     // Material tab + upload global texture.
@@ -210,8 +225,7 @@ test.describe('Use cases', () => {
   test('3. Business card with a front face texture', async ({ page }) => {
     await openEditor(page);
 
-    await page.getByRole('button', { name: /^object$/i }).click();
-    await page.getByRole('button', { name: 'Card', exact: true }).first().click();
+    await clickMockupPreset(page, 'Card');
     await expect.poll(async () => (await readStore(page)).objects[0]?.type).toBe('card');
 
     await page.getByRole('button', { name: /^material$/i }).click();
@@ -235,16 +249,15 @@ test.describe('Use cases', () => {
 
   test('4. Multiple objects + undo/redo', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: /^object$/i }).click();
 
     // The store starts with one Cube. Turn it into a phone, then Add a mug.
-    await page.getByRole('button', { name: 'Phone', exact: true }).first().click();
+    await clickMockupPreset(page, 'Phone');
     await expect.poll(async () => (await readStore(page)).objects.length).toBe(1);
 
     // Add a fresh object via the "+ Add" button, then convert that one to a mug.
     await page.getByRole('button', { name: /^add$/i }).first().click();
     await expect.poll(async () => (await readStore(page)).objects.length).toBe(2);
-    await page.getByRole('button', { name: 'Mug', exact: true }).first().click();
+    await clickMockupPreset(page, 'Mug');
 
     const afterAdd = await readStore(page);
     expect(afterAdd.objects).toHaveLength(2);
@@ -268,8 +281,7 @@ test.describe('Use cases', () => {
   test('5. 4x export resolution produces a high-res PNG', async ({ page }) => {
     await openEditor(page);
 
-    await page.getByRole('button', { name: /^object$/i }).click();
-    await page.getByRole('button', { name: 'Phone', exact: true }).first().click();
+    await clickMockupPreset(page, 'Phone');
 
     await page.getByRole('button', { name: /^export$/i }).first().click();
     await page.getByRole('button', { name: /^4x$/i }).click();
@@ -299,8 +311,7 @@ test.describe('Use cases', () => {
   test('6. Scene survives a page reload', async ({ page }) => {
     await openEditor(page);
 
-    await page.getByRole('button', { name: /^object$/i }).click();
-    await page.getByRole('button', { name: 'Phone', exact: true }).first().click();
+    await clickMockupPreset(page, 'Phone');
     await page.getByRole('button', { name: /^material$/i }).click();
     await page.getByRole('button', { name: /glossy/i }).click();
 

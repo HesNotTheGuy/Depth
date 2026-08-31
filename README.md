@@ -2,7 +2,7 @@
 
 **Drop in a photo. Place a 3D object. The lighting just matches.**
 
-Most designers don't need to learn Blender. They need a phone mockup on a desk, a product shot with the right shadow, a mug with their logo on it. Depth lets you do that in seconds. Upload a photo, pick an object, drag it into place. The lighting and shadows match your scene automatically. -- Work in progress!
+Most designers don't need to learn Blender. They need a phone mockup on a desk, a product shot with the right shadow, a mug with their logo on it. Depth lets you do that in seconds. Upload a photo, pick an object, drag it into place. The lighting and shadows match your scene automatically.
 
 <p align="center">
   <img src="docs/screenshots/upload.png" alt="Upload Screen" width="720" />
@@ -18,23 +18,25 @@ Most designers don't need to learn Blender. They need a phone mockup on a desk, 
 
 ```
 depth/
-├── sdk/          C++ SDK (embeddable compositing engine)
-└── web/          Web prototype (React + Three.js demo app)
+├── sdk/            C++ SDK (embeddable compositing engine)
+├── web/            Web app (React + Three.js)
+├── electron/       Desktop shell (loads web + native sidecar)
+└── figma-plugin/   Experimental Figma bridge
 ```
 
-### [`sdk/`](./sdk) - C++ SDK (the engine)
+### [`sdk/`](./sdk) — C++ SDK (the engine)
 
-The core technology: a zero-dependency C++ library for compositing 3D objects onto background images with automatic lighting estimation.
+Zero-dependency C++20 library for compositing 3D objects onto background images with automatic lighting estimation.
 
-- **Lighting estimation** - analyzes a photo to estimate light direction, color temp, brightness
-- **Surface detection** - define collision planes from drawn quads for realistic object placement
-- **3D rendering** - software rasterizer with z-buffer, per-pixel shading, and triangle mesh support
-- **OBJ mesh loading** - import Wavefront OBJ files with automatic normal computation
-- **Compositing** - alpha-over blending with Normal, Multiply, Screen, and Overlay modes
-- **C + C++ APIs** - clean C++ interface with a flat C API for FFI/embedding in any language
+- **Lighting estimation** — analyzes a photo to estimate light direction, color temp, brightness
+- **Surface detection** — define collision planes from drawn quads for realistic object placement
+- **3D rendering** — software rasterizer with z-buffer, per-pixel shading, and triangle mesh support
+- **OBJ mesh loading** — import Wavefront OBJ files with automatic normal computation
+- **Compositing** — alpha-over blending with Normal, Multiply, Screen, and Overlay modes
+- **C + C++ APIs** — clean C++ interface with a flat C API for FFI/embedding in any language
 
 ```cpp
-// 5 lines to composite a 3D object onto a photo
+// Composite a 3D object onto a photo
 Scene scene;
 scene.set_background(Image::load("photo.jpg"));
 scene.apply_lighting_estimate(estimate_lighting(scene.background()));
@@ -42,22 +44,24 @@ scene.add_object({.geometry = GeometryType::Box, .transform = {.position = {0, 0
 render_composite(*Renderer::create(), scene).save("output.png");
 ```
 
-### [`web/`](./web) - Web Prototype
+### [`web/`](./web) — Web App
 
-Interactive browser demo built with React 19, Three.js (React Three Fiber), Zustand, and Tailwind CSS v4.
+Interactive browser app built with React 19, Three.js (React Three Fiber), Zustand, and Tailwind CSS v4.
 
 - Upload a background photo → auto-analyze lighting
-- Pick from 5 primitive shapes + 6 mockup objects (mug, phone, bottle, bag, card, donut)
-- Choose material presets (matte, glossy, metal, glass, plastic) with color swatches
-- Per-face texture placement - click a face, upload a label/logo, adjust UV
+- Primitive shapes + mockup objects (mug, phone, bottle, bag, card, laptop, tablet, and more)
+- Material presets (matte, glossy, metal, glass, plastic, wood, marble, fabric, leather…)
+- Per-face texture placement on box/card faces
 - Draw surface planes on the image for object collision/snapping
 - Fine-tune lighting direction, height, shadow softness/color, and point lights
-- Scene templates - one-click presets for common product shot setups
-- Export composite as PNG at 1x/2x/4x resolution, or export layered passes
+- Scene templates and named save slots
+- Export composite as PNG at 1x/2x/4x, or export layered passes
 
 ```bash
 cd web && npm install && npm run dev
 ```
+
+Open `/` for the landing page, `/app` for the editor.
 
 ---
 
@@ -75,15 +79,15 @@ cd web && npm install && npm run dev
 
 ## Why Two Versions?
 
-| | Web Prototype | C++ SDK |
+| | Web App | C++ SDK |
 |---|---|---|
-| **Purpose** | Interactive demo, UX testing | Embeddable library, native performance |
+| **Purpose** | Interactive product for designers | Embeddable library, native performance |
 | **Stack** | React + Three.js + TypeScript | C++20, zero dependencies |
-| **Performance** | WebGL (~60-70% native) | Native GPU (Vulkan/Metal planned) |
+| **Rendering** | WebGL (Three.js) | Software rasterizer (GPU backends planned) |
 | **Distribution** | URL, zero install | Static/dynamic library, C API |
 | **Target** | End users (designers) | Developers, desktop apps, plugins |
 
-The web app is the fastest way to try the idea. The C++ SDK is the production-grade version for apps that need native performance.
+The web app is the fastest way to try the idea. The C++ SDK is for apps that need native embedding and performance.
 
 ---
 

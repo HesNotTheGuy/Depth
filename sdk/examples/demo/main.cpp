@@ -79,9 +79,14 @@ int main(int argc, char* argv[]) {
     Image result = render_composite(*renderer, scene);
     printf("Rendered: %ux%u (%zu bytes)\n", result.width(), result.height(), result.size_bytes());
 
-    // 8. Save (once stb_image_write is integrated)
-    // result.save("output.png");
+    // 8. Save
+    Status save_status = result.save("output.png");
+    if (save_status == Status::Ok) {
+        printf("Saved: output.png\n");
+    } else {
+        printf("Save failed (status %d)\n", static_cast<int>(save_status));
+    }
 
-    printf("\nDone. (File I/O requires stb_image integration — see TODO in image.cpp)\n");
+    printf("\nDone.\n");
     return 0;
 }

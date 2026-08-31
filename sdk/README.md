@@ -117,15 +117,14 @@ The SDK is designed for embedding into existing applications:
 
 ## Dependencies
 
-**Current:** None (zero external dependencies). The SDK uses only the C++ standard library.
-
-**Planned:** `stb_image` / `stb_image_write` for file I/O (header-only, vendored).
+**Current:** None at link time. Image I/O uses vendored `stb_image` / `stb_image_write` (header-only, under `third_party/stb`).
 
 ## Roadmap
 
-- [ ] stb_image integration for PNG/JPEG/WebP file I/O
+- [x] stb_image integration for PNG/JPEG file I/O
+- [x] Custom mesh loading (OBJ)
 - [ ] Vulkan renderer backend
 - [ ] Metal renderer backend
-- [ ] Custom mesh loading (OBJ/glTF)
 - [ ] Shadow mapping
 - [ ] Environment map / IBL support
+- [ ] glTF mesh loading

@@ -42,8 +42,8 @@ test('upload → mockup → material → export', async ({ page }) => {
     buffer: Buffer.from(fileBuffer),
   });
 
-  // Wait for "Lighting matched" badge to confirm analysis finished.
-  await expect(page.getByText('Lighting matched')).toBeVisible({ timeout: 30_000 });
+  // Wait for analysis badge (lighting + auto floor).
+  await expect(page.getByText(/ready — lighting/i)).toBeVisible({ timeout: 30_000 });
 
   // Continue into the editor.
   await page.getByRole('button', { name: /continue/i }).click();
@@ -52,8 +52,8 @@ test('upload → mockup → material → export', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^object$/i })).toBeVisible();
   await expect(page.getByRole('button', { name: /material/i })).toBeVisible();
 
-  // Click the Phone mockup.
-  await page.getByRole('button', { name: /^phone$/i }).click();
+  // Click the Phone mockup (featured preset above the fold).
+  await page.getByRole('button', { name: 'Phone', exact: true }).first().click({ force: true });
 
   // Switch to Material tab and pick Glossy.
   await page.getByRole('button', { name: /material/i }).click();

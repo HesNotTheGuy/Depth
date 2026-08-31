@@ -70,7 +70,7 @@ export const sceneTemplates: SceneTemplate[] = [
       objectClearcoat: 0.5,
       objectOpacity: 1.0,
       objectPosition: { x: 0, y: 0.5, z: 0 },
-      objectRotation: { x: 0.1, y: 0.3, z: 0 },
+      objectRotation: { x: 0.05, y: 0.35, z: 0 },
       objectScale: 1,
       brightness: 1.0,
       lightAngle: 40,

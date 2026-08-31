@@ -8,7 +8,7 @@ import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance, type V
 import { useUIStore } from '../../store/useUIStore';
 import { useHoverStore } from '../../store/useHoverStore';
 import { useAlignmentStore } from '../../store/useAlignmentStore';
-import { findSurfaceBelow } from '../../utils/surfaceUtils';
+import { findSurfaceBelow, objectHalfHeight } from '../../utils/surfaceUtils';
 import { computeAlignment, thresholdForZoom, type AlignmentInput } from '../../utils/alignmentUtils';
 import { BOX_FACE_NAMES, detectFace } from './faceDetection';
 
@@ -131,18 +131,24 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
     case 'torus': return new THREE.TorusGeometry(0.4, 0.15, 16, 32);
     case 'mug': {
       const body = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
-      const handle = new THREE.TorusGeometry(0.18, 0.04, 12, 24, Math.PI);
+      // Half-torus C-handle on +X. rotateZ stands the C vertically in XY
+      // (opens toward -X into the cylinder). Translate so the tube intersects
+      // the cylinder wall — too far out and the handle floats detached.
+      const handle = new THREE.TorusGeometry(0.18, 0.055, 12, 24, Math.PI);
       handle.rotateZ(Math.PI / 2);
-      handle.translate(0.35, 0, 0);
+      handle.translate(0.48, 0, 0);
       const merged = mergeGeometries([body, handle], false);
       body.dispose();
       handle.dispose();
-      // Fallback can't reuse `body` — it's been disposed. Build a fresh
-      // cylinder so the caller still gets a usable geometry.
       return merged ?? new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
     }
     case 'phone': {
-      const w = 0.38, h = 0.75, r = 0.06;
+      // Body only — the screen is a separate mesh in SceneObject so a PNG
+      // can map onto it without multi-material group hacks.
+      const w = 0.38;
+      const h = 0.78;
+      const r = 0.06;
+      const depth = 0.07;
       const shape = new THREE.Shape();
       shape.moveTo(-w + r, -h);
       shape.lineTo(w - r, -h);
@@ -153,14 +159,23 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       shape.quadraticCurveTo(-w, h, -w, h - r);
       shape.lineTo(-w, -h + r);
       shape.quadraticCurveTo(-w, -h, -w + r, -h);
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 3 });
-      geo.rotateX(-Math.PI / 2);
-      geo.translate(0, 0.75, 0);
-      geo.computeBoundingBox();
+      const body = new THREE.ExtrudeGeometry(shape, {
+        depth,
+        bevelEnabled: true,
+        bevelThickness: 0.012,
+        bevelSize: 0.012,
+        bevelSegments: 3,
+      });
+      body.translate(0, 0, -depth / 2);
+      body.computeBoundingBox();
       const center = new THREE.Vector3();
-      geo.boundingBox!.getCenter(center);
-      geo.translate(-center.x, -center.y, -center.z);
-      return geo;
+      body.boundingBox!.getCenter(center);
+      body.translate(-center.x, -center.y, -center.z);
+      return body;
+    }
+    case 'image': {
+      // Unit plane; aspect is corrected at render time from the texture.
+      return new THREE.PlaneGeometry(1, 1);
     }
     case 'bottle': {
       const pts: THREE.Vector2[] = [];
@@ -219,25 +234,10 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
     case 'card':
       return new THREE.BoxGeometry(0.875, 0.5, 0.01);
     case 'laptop': {
+      // Keyboard deck only — the display is a separate mesh so a PNG can
+      // map onto the screen without multi-material group hacks.
       const base = new THREE.BoxGeometry(1.0, 0.05, 0.7);
       base.translate(0, -0.025, 0);
-      const screen = new THREE.BoxGeometry(1.0, 0.6, 0.03);
-      screen.translate(0, 0.3, -0.015);
-      const tilt = (100 * Math.PI) / 180;
-      screen.rotateX(-tilt);
-      screen.translate(0, 0, -0.35);
-      const merged = mergeGeometries([base, screen], false);
-      if (merged) {
-        base.dispose();
-        screen.dispose();
-        merged.computeBoundingBox();
-        const c = new THREE.Vector3();
-        merged.boundingBox!.getCenter(c);
-        merged.translate(-c.x, -c.y, -c.z);
-        return merged;
-      }
-      // Merge failed — keep base, drop the unused screen intermediate.
-      screen.dispose();
       return base;
     }
     case 'tablet': {
@@ -330,28 +330,6 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
   }
 }
 
-function getObjectHalfHeight(type: string, scale: number): number {
-  switch (type) {
-    case 'box': return 0.5 * scale;
-    case 'cylinder': return 0.5 * scale;
-    case 'sphere': return 0.5 * scale;
-    case 'cone': return 0.5 * scale;
-    case 'torus': return 0.15 * scale;
-    case 'mug': return 0.4 * scale;
-    case 'phone': return 0.75 * scale;
-    case 'bottle': return 0.525 * scale;
-    case 'bag': return 0.5 * scale;
-    case 'card': return 0.25 * scale;
-    case 'donut': return 0.15 * scale;
-    case 'laptop': return 0.35 * scale;
-    case 'tablet': return 0.85 * scale;
-    case 'can': return 0.4 * scale;
-    case 'book': return 0.5 * scale;
-    case 'custom': return 0.5 * scale;
-    default: return 0.5 * scale;
-  }
-}
-
 interface SceneObjectInstanceProps {
   object: SceneObjectInstance;
   isSelected: boolean;
@@ -415,15 +393,24 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     }
     let cancelled = false;
     const loader = new THREE.TextureLoader();
-    loader.load(objectTexture, (tex) => {
-      if (cancelled) { tex.dispose(); return; }
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.colorSpace = THREE.SRGBColorSpace;
-      setLoadedTexture((prev) => { prev?.dispose(); return tex; });
-    });
+    loader.load(
+      objectTexture,
+      (tex) => {
+        if (cancelled) { tex.dispose(); return; }
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        setLoadedTexture((prev) => { prev?.dispose(); return tex; });
+        invalidate();
+      },
+      undefined,
+      (err) => {
+        console.warn('[depth] failed to load object texture', err);
+      },
+    );
     return () => { cancelled = true; };
-  }, [objectTexture]);
+  }, [objectTexture, invalidate]);
 
   // Final unmount cleanup — covers the case where the component goes away
   // without `objectTexture` flipping to null first. We track the latest
@@ -516,7 +503,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     if (!snapToSurface || surfaces.length === 0) return;
     const surfaceY = findSurfaceBelow(position, surfaces);
     if (surfaceY !== null) {
-      const halfH = getObjectHalfHeight(objectType, scale);
+      const halfH = objectHalfHeight(objectType, scale);
       const targetY = surfaceY + halfH;
       if (Math.abs(position.y - targetY) > 0.01) {
         updateObject(id, { position: { ...position, y: targetY } });
@@ -539,6 +526,24 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     return () => { prevPrimitiveRef.current?.dispose(); };
   }, []);
   const geometry = objectType === 'custom' ? customGeometry : primitiveGeometry;
+
+  // Image plates: resize the unit plane to match the PNG's aspect ratio.
+  // Must run after `geometry` is declared — referencing it earlier hits TDZ.
+  useEffect(() => {
+    if (objectType !== 'image' || !geometry || !loadedTexture?.image) return;
+    const img = loadedTexture.image as { width?: number; height?: number };
+    const w = img.width ?? 1;
+    const h = img.height ?? 1;
+    const aspect = w / Math.max(1, h);
+    const planeW = aspect >= 1 ? 1 : aspect;
+    const planeH = aspect >= 1 ? 1 / aspect : 1;
+    const next = new THREE.PlaneGeometry(planeW, planeH);
+    geometry.copy(next);
+    next.dispose();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    invalidate();
+  }, [objectType, geometry, loadedTexture, invalidate]);
 
   const needsPhysical = material === 'glass' || material === 'plastic';
 
@@ -570,11 +575,14 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     if (material === 'plastic') {
       base.clearcoat = clearcoat;
     }
-    if (loadedTexture) {
+    // Phone/tablet/laptop keep the PNG on the dedicated screen plate — don't
+    // also wrap it across the body UVs (looks like a broken sticker).
+    const screenDevice = objectType === 'phone' || objectType === 'tablet' || objectType === 'laptop';
+    if (loadedTexture && !screenDevice) {
       base.map = loadedTexture;
     }
     return base;
-  }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity, loadedTexture]);
+  }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity, loadedTexture, objectType]);
 
   // Drag handlers
   const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -796,14 +804,6 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     });
   }, [id, updateObject]);
 
-  // Size of selection outline — uses geometry bounding sphere for a simple cue.
-  // Must be called unconditionally before any early return.
-  const selectionRadius = useMemo(() => {
-    if (!geometry) return 0.7;
-    geometry.computeBoundingSphere();
-    return (geometry.boundingSphere?.radius ?? 0.7) * 1.08;
-  }, [geometry]);
-
   if (!geometry || !visible) return null;
 
   return (
@@ -811,7 +811,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
       <group ref={(el) => { groupRef.current = el; if (el && !groupReady) setGroupReady(true); }}>
         <mesh
           ref={meshRef}
-          castShadow
+          castShadow={objectType !== 'image'}
           receiveShadow
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -820,16 +820,111 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
         >
           <primitive object={geometry} attach="geometry" />
           {!useMultiMaterial && (needsPhysical ? (
-            <meshPhysicalMaterial {...singleMaterial} />
+            <meshPhysicalMaterial
+              {...singleMaterial}
+              {...(objectType === 'image'
+                ? { transparent: true, alphaTest: 0.05, side: THREE.DoubleSide, depthWrite: true }
+                : {})}
+            />
           ) : (
-            <meshStandardMaterial {...singleMaterial} />
+            <meshStandardMaterial
+              {...singleMaterial}
+              {...(objectType === 'image'
+                ? { transparent: true, alphaTest: 0.05, side: THREE.DoubleSide, depthWrite: true }
+                : {})}
+            />
           ))}
         </mesh>
-        {isSelected && (
-          <mesh raycast={() => null}>
-            <sphereGeometry args={[selectionRadius, 24, 16]} />
-            <meshBasicMaterial color="#3b82f6" wireframe transparent opacity={0.35} depthTest={false} />
+
+        {/* Device screen plates — faceTextures.front (or global texture) shows here.
+            Use MeshBasicMaterial so artwork stays readable regardless of scene lighting.
+            Sit the plate clearly in front of the beveled phone body. */}
+        {objectType === 'phone' && (
+          <mesh
+            position={[0, 0.02, 0.055]}
+            castShadow={false}
+            receiveShadow={false}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerOut}
+          >
+            <planeGeometry args={[0.58, 1.2]} />
+            <meshBasicMaterial
+              key={loadedFaceTextures.front?.uuid ?? loadedTexture?.uuid ?? 'phone-screen-empty'}
+              map={loadedFaceTextures.front ?? loadedTexture ?? null}
+              color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
+              toneMapped={false}
+              side={THREE.DoubleSide}
+            />
           </mesh>
+        )}
+
+        {objectType === 'tablet' && (
+          <mesh
+            position={[0, 0.035, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            castShadow={false}
+            receiveShadow={false}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerOut}
+          >
+            <planeGeometry args={[1.05, 1.5]} />
+            <meshBasicMaterial
+              key={loadedFaceTextures.front?.uuid ?? loadedTexture?.uuid ?? 'tablet-screen-empty'}
+              map={loadedFaceTextures.front ?? loadedTexture ?? null}
+              color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
+              toneMapped={false}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        )}
+
+        {objectType === 'laptop' && (
+          <>
+            {/* Display bezel */}
+            <mesh
+              position={[0, 0.28, -0.32]}
+              rotation={[(-100 * Math.PI) / 180, 0, 0]}
+              castShadow
+              receiveShadow
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerOut}
+            >
+              <boxGeometry args={[1.0, 0.62, 0.02]} />
+              <meshStandardMaterial color="#1a1a1a" roughness={0.45} metalness={0.2} />
+            </mesh>
+            {/* Display content — slightly in front of the bezel */}
+            <mesh
+              position={[0, 0.28, -0.295]}
+              rotation={[(-100 * Math.PI) / 180, 0, 0]}
+              castShadow={false}
+              receiveShadow={false}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerOut}
+            >
+              <planeGeometry args={[0.9, 0.52]} />
+              <meshBasicMaterial
+                key={loadedFaceTextures.front?.uuid ?? loadedTexture?.uuid ?? 'laptop-screen-empty'}
+                map={loadedFaceTextures.front ?? loadedTexture ?? null}
+                color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
+                toneMapped={false}
+              />
+            </mesh>
+          </>
+        )}
+
+        {isSelected && geometry && objectType !== 'image' && (
+          <lineSegments raycast={() => null} renderOrder={2}>
+            <edgesGeometry args={[geometry, 55]} />
+            <lineBasicMaterial color="#a78bfa" transparent opacity={0.75} />
+          </lineSegments>
         )}
       </group>
       {isSelected && groupReady && groupRef.current && (

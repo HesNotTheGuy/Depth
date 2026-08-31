@@ -170,7 +170,7 @@ export function CompositeViewport() {
   const canvasPan = useUIStore((s) => s.canvasPan);
   const setCanvasZoom = useUIStore((s) => s.setCanvasZoom);
   const setCanvasPan = useUIStore((s) => s.setCanvasPan);
-  const fitToScreen = useUIStore((s) => s.fitToScreen);
+  const fitRequestId = useUIStore((s) => s.fitRequestId);
   const gizmoMode = useUIStore((s) => s.gizmoMode);
   const setGizmoMode = useUIStore((s) => s.setGizmoMode);
   const isPickingColor = useUIStore((s) => s.isPickingColor);
@@ -205,8 +205,9 @@ export function CompositeViewport() {
         const rect = containerRef.current.getBoundingClientRect();
         const scaleX = rect.width / img.width;
         const scaleY = rect.height / img.height;
-        const fit = Math.min(scaleX, scaleY) * 0.95; // 95% to leave a small margin
-        setCanvasZoom(fit);
+        // Cap upscaling so tiny plates don't explode to 400%+; downscaling is uncapped.
+        const fit = Math.min(scaleX, scaleY) * 0.95;
+        setCanvasZoom(Math.min(Math.max(fit, 0.1), 2.5));
         setCanvasPan({ x: 0, y: 0 });
       }
     };
@@ -288,16 +289,28 @@ export function CompositeViewport() {
     isPanning.current = false;
   }, []);
 
-  // Fit to screen handler
+  // Fit to screen handler — shared by the Fit button and Ctrl+0 (via fitRequestId).
   const handleFit = useCallback(() => {
-    if (!imageSize || !containerRef.current) { fitToScreen(); return; }
+    if (!imageSize || !containerRef.current) {
+      setCanvasZoom(1);
+      setCanvasPan({ x: 0, y: 0 });
+      return;
+    }
     const rect = containerRef.current.getBoundingClientRect();
     const scaleX = rect.width / imageSize.w;
     const scaleY = rect.height / imageSize.h;
     const fit = Math.min(scaleX, scaleY) * 0.95;
-    setCanvasZoom(fit);
+    setCanvasZoom(Math.min(Math.max(fit, 0.1), 2.5));
     setCanvasPan({ x: 0, y: 0 });
-  }, [imageSize, setCanvasZoom, setCanvasPan, fitToScreen]);
+  }, [imageSize, setCanvasZoom, setCanvasPan]);
+
+  // Respond to store-driven fit requests (keyboard shortcut Ctrl+0).
+  const lastFitRequest = useRef(0);
+  useEffect(() => {
+    if (fitRequestId === 0 || fitRequestId === lastFitRequest.current) return;
+    lastFitRequest.current = fitRequestId;
+    handleFit();
+  }, [fitRequestId, handleFit]);
 
   // Auto-dismiss the toast after 2.5s
   useEffect(() => {
@@ -357,8 +370,26 @@ export function CompositeViewport() {
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
     const file = files[0]; // Multi-file drop: take only the first; ignore the rest.
+
+    // Drop a 3D product model (.obj) — lands on the assumed floor via addObject snap.
+    if (file.name.toLowerCase().endsWith('.obj')) {
+      if (file.size > MAX_DROP_BYTES) {
+        setDropFeedback({ message: 'Model too large (max 5 MB)', type: 'error' });
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const id = useSceneStore.getState().addObject('custom');
+      useSceneStore.getState().updateObject(id, {
+        customModelUrl: url,
+        name: file.name.replace(/\.obj$/i, '') || 'Product',
+      });
+      setDropFeedback({ message: `Dropped ${file.name} — snapped to surface`, type: 'success' });
+      setFlashTarget(true);
+      return;
+    }
+
     if (!file.type.startsWith('image/')) {
-      setDropFeedback({ message: 'Only image files are supported', type: 'error' });
+      setDropFeedback({ message: 'Drop an image (PNG/JPG) or OBJ model', type: 'error' });
       return;
     }
     if (file.size > MAX_DROP_BYTES) {
@@ -366,32 +397,45 @@ export function CompositeViewport() {
       return;
     }
 
-    // Resolve target: most-recent hover, else selected object, else nothing.
+    // Resolve target: most-recent hover, else selected object.
+    // No target → create a flat Image plate from the PNG (primary mockup-art path).
     const hover = useHoverStore.getState().latest;
     const sceneState = useSceneStore.getState();
     const targetId = hover?.objectId ?? sceneState.selectedObjectId;
-    if (!targetId) {
-      setDropFeedback({ message: 'Drop on an object or select one first', type: 'error' });
-      return;
-    }
-    const targetObj = sceneState.objects.find((o) => o.id === targetId);
-    if (!targetObj) return;
 
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
       if (typeof dataUrl !== 'string') return;
 
-      // Decide face-texture vs global-texture.
-      // Per-face textures only render for box/card (the multi-material path in
-      // SceneObject). For other shapes we fall back to the global object texture.
+      if (!targetId) {
+        const id = useSceneStore.getState().addObject('image');
+        useSceneStore.getState().updateObject(id, { texture: dataUrl, name: file.name.replace(/\.[^.]+$/, '') || 'Image' });
+        setDropFeedback({ message: `Added PNG as image plate`, type: 'success' });
+        setFlashTarget(true);
+        return;
+      }
+
+      const targetObj = useSceneStore.getState().objects.find((o) => o.id === targetId);
+      if (!targetObj) return;
+
+      // Phone / tablet / laptop: PNG goes on the screen (faceTextures.front)
+      // so it actually shows on the screen plate mesh.
+      const screenTypes = new Set(['phone', 'tablet', 'laptop']);
       const face = hover?.face;
       const shapeSupportsPerFace = targetObj.type === 'box' || targetObj.type === 'card';
       const isNamedFace = face != null && BOX_FACE_NAMES.has(face);
 
-      if (shapeSupportsPerFace && isNamedFace) {
-        // setFaceTextureForSelected operates on the selected object; ensure that.
-        if (sceneState.selectedObjectId !== targetId) selectObject(targetId);
+      if (screenTypes.has(targetObj.type)) {
+        if (useSceneStore.getState().selectedObjectId !== targetId) selectObject(targetId);
+        setFaceTextureForSelected('front', dataUrl);
+        updateObject(targetId, { texture: dataUrl });
+        setDropFeedback({ message: `Applied PNG to ${targetObj.name} screen`, type: 'success' });
+      } else if (targetObj.type === 'image') {
+        updateObject(targetId, { texture: dataUrl });
+        setDropFeedback({ message: `Updated image plate`, type: 'success' });
+      } else if (shapeSupportsPerFace && isNamedFace) {
+        if (useSceneStore.getState().selectedObjectId !== targetId) selectObject(targetId);
         setFaceTextureForSelected(face, dataUrl);
         setDropFeedback({ message: `Applied image to ${targetObj.name} (${face} face)`, type: 'success' });
       } else {

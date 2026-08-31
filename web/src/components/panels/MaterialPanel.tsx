@@ -84,6 +84,7 @@ export function MaterialPanel() {
   const setFaceTextureTransformForSelected = useSceneStore((s) => s.setFaceTextureTransformForSelected);
   const textureInputRef = useRef<HTMLInputElement>(null);
   const faceTextureInputRef = useRef<HTMLInputElement>(null);
+  const screenTextureInputRef = useRef<HTMLInputElement>(null);
 
   if (!selected) {
     return (
@@ -99,6 +100,14 @@ export function MaterialPanel() {
     material, color, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity,
     texture: objectTexture, textureRepeat, textureOffset, textureRotation, faceTextures,
   } = selected;
+
+  const isScreenDevice = selected.type === 'phone' || selected.type === 'tablet' || selected.type === 'laptop';
+  const isImagePlate = selected.type === 'image';
+  const screenTextureUrl = isScreenDevice
+    ? (faceTextures.front?.url ?? objectTexture)
+    : isImagePlate
+      ? objectTexture
+      : null;
 
   const activeFaceConfig: FaceTextureConfig | null =
     selectedFace ? faceTextures[selectedFace] ?? null : null;
@@ -125,6 +134,33 @@ export function MaterialPanel() {
       setFaceTextureForSelected(selectedFace, reader.result as string);
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleScreenTextureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!(await validateImageWithModal(file))) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      if (isScreenDevice) {
+        setFaceTextureForSelected('front', dataUrl);
+        updateSelected({ texture: dataUrl });
+      } else {
+        updateSelected({ texture: dataUrl });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const clearScreenTexture = () => {
+    if (isScreenDevice) {
+      removeFaceTextureForSelected('front');
+      updateSelected({ texture: null });
+    } else {
+      updateSelected({ texture: null });
+    }
   };
 
   const applyPickedColor = (hex: string) => {
@@ -171,6 +207,60 @@ export function MaterialPanel() {
 
   return (
     <div>
+      {(isScreenDevice || isImagePlate) && (
+        <div className="mb-5">
+          <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2 block">
+            {isImagePlate ? 'Mockup PNG' : 'Screen image'}
+          </label>
+          {screenTextureUrl ? (
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-14 h-14 rounded-lg overflow-hidden border border-white/10 shrink-0 bg-white/[0.04]">
+                <img src={screenTextureUrl} alt="Screen artwork" className="w-full h-full object-cover" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] text-text-primary font-medium">
+                  {isImagePlate ? 'Image plate artwork' : 'PNG on screen'}
+                </div>
+                <p className="text-[10px] text-text-muted mt-0.5">
+                  Drop another PNG on the viewport to replace it.
+                </p>
+              </div>
+              <button
+                onClick={() => screenTextureInputRef.current?.click()}
+                className="p-1.5 hover:bg-white/10 rounded text-text-muted hover:text-primary transition-colors"
+                title="Replace image"
+              >
+                <Upload size={13} />
+              </button>
+              <button
+                onClick={clearScreenTexture}
+                className="p-1.5 hover:bg-white/10 rounded text-text-muted hover:text-red-400 transition-colors"
+                title="Remove image"
+              >
+                <X size={13} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => screenTextureInputRef.current?.click()}
+              className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-primary/30 hover:border-primary/50 rounded-lg text-[11px] text-primary font-medium transition-all bg-primary/5 hover:bg-primary/10"
+              data-testid="screen-texture-upload-button"
+            >
+              <Upload size={14} />
+              {isImagePlate ? 'Upload mockup PNG' : 'Upload screen PNG'}
+            </button>
+          )}
+          <input
+            ref={screenTextureInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/*"
+            className="hidden"
+            data-testid="screen-texture-input"
+            onChange={handleScreenTextureUpload}
+          />
+        </div>
+      )}
+
       <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block">
         Material — Basic
       </label>

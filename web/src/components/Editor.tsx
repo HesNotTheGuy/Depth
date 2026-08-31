@@ -1,6 +1,7 @@
 import { Download, ArrowLeft, Box, Sun, Palette, Layers, Sparkles, LayoutGrid, Image, Undo2, Redo2, Keyboard, Bookmark } from 'lucide-react';
 import { useUIStore } from '../store/useUIStore';
 import { useSceneStore } from '../store/useSceneStore';
+import { confirmModal } from '../store/useModalStore';
 import { useHistory } from '../hooks/useHistory';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import { CompositeViewport } from './viewport/CompositeViewport';
@@ -36,16 +37,27 @@ export function Editor() {
 
   useKeyboardShortcuts();
 
+  const handleStartOver = async () => {
+    if (isDirty || useSceneStore.getState().backgroundImage) {
+      const ok = await confirmModal({
+        title: 'Start over?',
+        description: 'This clears the current scene and returns to upload. Unsaved work will be lost.',
+        confirmLabel: 'Start over',
+        destructive: true,
+      });
+      if (!ok) return;
+    }
+    reset();
+    setStep('upload');
+  };
+
   return (
     <div className="flex flex-col h-full bg-surface">
       {/* Toolbar */}
       <div className="h-12 border-b border-panel-border bg-surface-raised flex items-center px-3 justify-between shrink-0">
         <div className="flex items-center gap-2.5">
           <button
-            onClick={() => {
-              reset();
-              setStep('upload');
-            }}
+            onClick={handleStartOver}
             className="p-1.5 rounded-lg hover:bg-white/5 text-text-muted hover:text-text-primary transition-colors"
             title="Start over"
           >

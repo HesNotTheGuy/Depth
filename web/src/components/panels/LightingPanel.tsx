@@ -20,8 +20,8 @@ const ENV_OPTIONS: EnvOption[] = [
   { id: 'city',         label: 'City',      gradient: 'linear-gradient(135deg,#7b8c9e,#3d4a5a)' },
   { id: 'park',         label: 'Park',      gradient: 'linear-gradient(135deg,#bce2a3,#7cb86f)' },
   { id: 'lobby',        label: 'Lobby',     gradient: 'linear-gradient(135deg,#f5d98a,#b88a3a)' },
-  { id: 'softbox',      label: 'Softbox',   gradient: 'linear-gradient(135deg,#ffffff,#e0e0e0)' },
-  { id: 'window-light', label: 'Window',    gradient: 'linear-gradient(135deg,#fff3d6,#d8c098)' },
+  { id: 'softbox',      label: 'Softbox*',  gradient: 'linear-gradient(135deg,#ffffff,#e0e0e0)' },
+  { id: 'window-light', label: 'Window*',   gradient: 'linear-gradient(135deg,#fff3d6,#d8c098)' },
 ];
 
 export function LightingPanel() {
@@ -166,6 +166,9 @@ export function LightingPanel() {
               );
             })}
           </div>
+          <p className="text-[9px] text-text-muted mb-3 -mt-1">
+            * Softbox and Window reuse the Studio HDRI with different intensity defaults.
+          </p>
           <SliderInput
             label="Intensity"
             value={environmentIntensity}

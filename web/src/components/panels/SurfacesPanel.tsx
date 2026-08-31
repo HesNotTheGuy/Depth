@@ -15,7 +15,7 @@ export function SurfacesPanel() {
     <div>
       <div className="mb-4">
         <p className="text-[11px] text-text-muted mb-3 leading-relaxed">
-          Draw surfaces on your photo to define where 3D objects can rest. Click 4 corners to create a plane.
+          A floor surface is assumed when you upload a photo. Draw extra planes for desks, shelves, or tables — objects snap to them automatically.
         </p>
         <button
           onClick={startDrawing}
@@ -49,7 +49,7 @@ export function SurfacesPanel() {
             <PenTool size={18} className="text-text-muted" />
           </div>
           <p className="text-[11px] text-text-muted leading-relaxed max-w-[180px] mx-auto">
-            No surfaces yet. Draw one so your object has a place to land.
+            Upload a photo to get an auto floor, or draw a custom surface.
           </p>
         </div>
       ) : (

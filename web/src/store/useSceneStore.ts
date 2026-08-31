@@ -22,8 +22,14 @@ import {
   type SavedScene,
   type SavedSceneMeta,
 } from './scenePersistence';
+import { createDefaultFloorSurface, snapPositionToSurfaces } from '../utils/surfaceUtils';
 
-export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'laptop' | 'tablet' | 'can' | 'book' | 'custom';
+export type ObjectPreset =
+  | 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus'
+  | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut'
+  | 'laptop' | 'tablet' | 'can' | 'book'
+  | 'image' // flat PNG/JPG mockup plate (the primary artwork path)
+  | 'custom';
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp';
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
@@ -170,6 +176,7 @@ const PRESET_LABELS: Record<ObjectPreset, string> = {
   tablet: 'Tablet',
   can: 'Can',
   book: 'Book',
+  image: 'Image',
   custom: 'Custom',
 };
 
@@ -229,6 +236,29 @@ export function makeDefaultObject(type: ObjectPreset, nameSuffix = 1): SceneObje
     base.material = 'glossy';
     base.roughness = 0.3;
     base.metalness = 0;
+  }
+  if (type === 'phone') {
+    // Standing phone, slight yaw so the silhouette reads clearly.
+    base.color = '#1A1A1A';
+    base.material = 'plastic';
+    base.roughness = 0.4;
+    base.clearcoat = 0.5;
+    base.rotation = { x: 0.05, y: 0.35, z: 0 };
+  }
+  if (type === 'mug') {
+    base.color = '#F5F5F5';
+    base.material = 'matte';
+    base.roughness = 0.85;
+  }
+  if (type === 'image') {
+    // Flat PNG plate facing the camera — drop your mockup artwork on it.
+    base.color = '#ffffff';
+    base.material = 'matte';
+    base.roughness = 1;
+    base.metalness = 0;
+    base.position = { x: 0, y: 0.6, z: 0 };
+    base.rotation = { x: 0, y: 0, z: 0 };
+    base.scale = 1.2;
   }
   return base;
 }
@@ -326,6 +356,8 @@ interface SceneState {
   addSurface: (surface: SurfacePlane) => void;
   updateSurface: (id: string, updates: Partial<SurfacePlane>) => void;
   removeSurface: (id: string) => void;
+  /** Replace surfaces with the auto floor inferred from the photo. */
+  initializePhotoSurfaces: () => void;
   setSnapToSurface: (snap: boolean) => void;
 
   // Export / blend
@@ -619,12 +651,19 @@ export const useSceneStore = create<SceneState>()(
         const existing = get().objects;
         const obj = makeDefaultObject(preset);
         obj.name = nextName(existing, preset);
-        // Offset so new objects don't fully stack
-        obj.position = {
+        // Offset so new objects don't fully stack; snap Y onto assumed floor.
+        const rawPosition = {
           x: existing.length * 0.3,
           y: 0.5,
           z: 0,
         };
+        obj.position = snapPositionToSurfaces(
+          rawPosition,
+          preset,
+          obj.scale,
+          get().surfaces,
+          get().snapToSurface,
+        );
         set({ objects: [...existing, obj], selectedObjectId: obj.id });
         return obj.id;
       },
@@ -810,6 +849,8 @@ export const useSceneStore = create<SceneState>()(
       removeSceneLight: (id) => set((s) => ({ sceneLights: s.sceneLights.filter((l) => l.id !== id) })),
 
       addSurface: (surface) => set((s) => ({ surfaces: [...s.surfaces, surface] })),
+      initializePhotoSurfaces: () =>
+        set({ surfaces: [createDefaultFloorSurface()] }),
       updateSurface: (id, updates) =>
         set((s) => ({ surfaces: s.surfaces.map((p) => (p.id === id ? { ...p, ...updates } : p)) })),
       removeSurface: (id) => set((s) => ({ surfaces: s.surfaces.filter((p) => p.id !== id) })),
