@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import { useSceneStore, type ObjectPreset } from '../../store/useSceneStore';
+import { useSceneStore, makeDefaultObject, type ObjectPreset } from '../../store/useSceneStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
 import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen, Plus, Eye, EyeOff, Trash2, Copy, CircleDot } from 'lucide-react';
 import { SliderInput, Vec3SliderInput } from '../ui/SliderInput';
@@ -72,7 +72,19 @@ export function ObjectPanel() {
   const addPresetButton = (preset: ObjectPreset) => {
     if (selected) {
       if (selected.customModelUrl) URL.revokeObjectURL(selected.customModelUrl);
-      updateSelected({ type: preset, customModelUrl: null });
+      // Apply preset defaults (rotation/color/material) so Cube → Phone
+      // doesn't leave a flat grey slab with identity rotation.
+      const defaults = makeDefaultObject(preset);
+      updateSelected({
+        type: preset,
+        customModelUrl: null,
+        color: defaults.color,
+        material: defaults.material,
+        roughness: defaults.roughness,
+        metalness: defaults.metalness,
+        clearcoat: defaults.clearcoat,
+        rotation: defaults.rotation,
+      });
     } else {
       addObject(preset);
     }

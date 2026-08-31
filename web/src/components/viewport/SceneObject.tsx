@@ -131,18 +131,23 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
     case 'torus': return new THREE.TorusGeometry(0.4, 0.15, 16, 32);
     case 'mug': {
       const body = new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
-      const handle = new THREE.TorusGeometry(0.18, 0.04, 12, 24, Math.PI);
+      // Half-torus C-handle on +X. rotateZ stands the C vertically in XY
+      // (opens toward -X into the cylinder). Translate so the tube intersects
+      // the cylinder wall — too far out and the handle floats detached.
+      const handle = new THREE.TorusGeometry(0.18, 0.055, 12, 24, Math.PI);
       handle.rotateZ(Math.PI / 2);
-      handle.translate(0.35, 0, 0);
+      handle.translate(0.48, 0, 0);
       const merged = mergeGeometries([body, handle], false);
       body.dispose();
       handle.dispose();
-      // Fallback can't reuse `body` — it's been disposed. Build a fresh
-      // cylinder so the caller still gets a usable geometry.
       return merged ?? new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
     }
     case 'phone': {
-      const w = 0.38, h = 0.75, r = 0.06;
+      // Standing phone: screen faces +Z (toward the default camera).
+      const w = 0.38;
+      const h = 0.78;
+      const r = 0.06;
+      const depth = 0.07;
       const shape = new THREE.Shape();
       shape.moveTo(-w + r, -h);
       shape.lineTo(w - r, -h);
@@ -153,9 +158,26 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       shape.quadraticCurveTo(-w, h, -w, h - r);
       shape.lineTo(-w, -h + r);
       shape.quadraticCurveTo(-w, -h, -w + r, -h);
-      const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.08, bevelEnabled: true, bevelThickness: 0.015, bevelSize: 0.015, bevelSegments: 3 });
-      geo.rotateX(-Math.PI / 2);
-      geo.translate(0, 0.75, 0);
+      const body = new THREE.ExtrudeGeometry(shape, {
+        depth,
+        bevelEnabled: true,
+        bevelThickness: 0.012,
+        bevelSize: 0.012,
+        bevelSegments: 3,
+      });
+      body.translate(0, 0, -depth / 2);
+
+      // Slightly inset screen plate so the mockup reads as a phone, not a slab.
+      // ExtrudeGeometry is non-indexed; BoxGeometry is indexed — convert so merge works.
+      const screenBox = new THREE.BoxGeometry(w * 1.7, h * 1.75, 0.008);
+      const screen = screenBox.toNonIndexed();
+      screenBox.dispose();
+      screen.translate(0, 0.02, depth / 2 + 0.002);
+
+      const merged = mergeGeometries([body, screen], false);
+      screen.dispose();
+      const geo = merged ?? body;
+      if (merged) body.dispose();
       geo.computeBoundingBox();
       const center = new THREE.Vector3();
       geo.boundingBox!.getCenter(center);
@@ -796,14 +818,6 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     });
   }, [id, updateObject]);
 
-  // Size of selection outline — uses geometry bounding sphere for a simple cue.
-  // Must be called unconditionally before any early return.
-  const selectionRadius = useMemo(() => {
-    if (!geometry) return 0.7;
-    geometry.computeBoundingSphere();
-    return (geometry.boundingSphere?.radius ?? 0.7) * 1.08;
-  }, [geometry]);
-
   if (!geometry || !visible) return null;
 
   return (
@@ -825,11 +839,11 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
             <meshStandardMaterial {...singleMaterial} />
           ))}
         </mesh>
-        {isSelected && (
-          <mesh raycast={() => null}>
-            <sphereGeometry args={[selectionRadius, 24, 16]} />
-            <meshBasicMaterial color="#3b82f6" wireframe transparent opacity={0.35} depthTest={false} />
-          </mesh>
+        {isSelected && geometry && (
+          <lineSegments raycast={() => null} renderOrder={2}>
+            <edgesGeometry args={[geometry, 55]} />
+            <lineBasicMaterial color="#a78bfa" transparent opacity={0.75} />
+          </lineSegments>
         )}
       </group>
       {isSelected && groupReady && groupRef.current && (

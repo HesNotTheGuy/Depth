@@ -230,6 +230,19 @@ export function makeDefaultObject(type: ObjectPreset, nameSuffix = 1): SceneObje
     base.roughness = 0.3;
     base.metalness = 0;
   }
+  if (type === 'phone') {
+    // Standing phone, slight yaw so the silhouette reads clearly.
+    base.color = '#1A1A1A';
+    base.material = 'plastic';
+    base.roughness = 0.4;
+    base.clearcoat = 0.5;
+    base.rotation = { x: 0.05, y: 0.35, z: 0 };
+  }
+  if (type === 'mug') {
+    base.color = '#F5F5F5';
+    base.material = 'matte';
+    base.roughness = 0.85;
+  }
   return base;
 }
 

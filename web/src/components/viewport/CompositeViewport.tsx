@@ -205,8 +205,9 @@ export function CompositeViewport() {
         const rect = containerRef.current.getBoundingClientRect();
         const scaleX = rect.width / img.width;
         const scaleY = rect.height / img.height;
-        const fit = Math.min(scaleX, scaleY) * 0.95; // 95% to leave a small margin
-        setCanvasZoom(fit);
+        // Cap upscaling so tiny plates don't explode to 400%+; downscaling is uncapped.
+        const fit = Math.min(scaleX, scaleY) * 0.95;
+        setCanvasZoom(Math.min(Math.max(fit, 0.1), 2.5));
         setCanvasPan({ x: 0, y: 0 });
       }
     };
@@ -299,7 +300,7 @@ export function CompositeViewport() {
     const scaleX = rect.width / imageSize.w;
     const scaleY = rect.height / imageSize.h;
     const fit = Math.min(scaleX, scaleY) * 0.95;
-    setCanvasZoom(fit);
+    setCanvasZoom(Math.min(Math.max(fit, 0.1), 2.5));
     setCanvasPan({ x: 0, y: 0 });
   }, [imageSize, setCanvasZoom, setCanvasPan]);
 

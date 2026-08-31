@@ -9,20 +9,32 @@ function App() {
   const step = useUIStore((s) => s.step);
   const setStep = useUIStore((s) => s.setStep);
 
-  // After localStorage rehydration, jump straight into the editor when a
-  // background plate is already present — otherwise a refresh dumps users
-  // back on an empty upload screen despite a persisted scene.
+  // Restore the editor after refresh when a background plate was persisted.
+  // `temporal(persist(...))` nesting can leave `hasHydrated()` false and skip
+  // `onFinishHydration`, so we also do a short one-shot fallback — kept brief
+  // so it can't race a fresh upload on the same page load.
   useEffect(() => {
-    const restore = () => {
-      if (useSceneStore.getState().backgroundImage) {
+    let cancelled = false;
+
+    const tryRestore = () => {
+      if (cancelled) return;
+      if (
+        useUIStore.getState().step === 'upload' &&
+        useSceneStore.getState().backgroundImage
+      ) {
         setStep('editor');
       }
     };
-    if (useSceneStore.persist.hasHydrated()) {
-      restore();
-      return;
-    }
-    return useSceneStore.persist.onFinishHydration(restore);
+
+    tryRestore();
+    const unsubHydrate = useSceneStore.persist.onFinishHydration(tryRestore);
+    const t = window.setTimeout(tryRestore, 100);
+
+    return () => {
+      cancelled = true;
+      unsubHydrate();
+      clearTimeout(t);
+    };
   }, [setStep]);
 
   return (
