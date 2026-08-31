@@ -416,15 +416,24 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     }
     let cancelled = false;
     const loader = new THREE.TextureLoader();
-    loader.load(objectTexture, (tex) => {
-      if (cancelled) { tex.dispose(); return; }
-      tex.wrapS = THREE.RepeatWrapping;
-      tex.wrapT = THREE.RepeatWrapping;
-      tex.colorSpace = THREE.SRGBColorSpace;
-      setLoadedTexture((prev) => { prev?.dispose(); return tex; });
-    });
+    loader.load(
+      objectTexture,
+      (tex) => {
+        if (cancelled) { tex.dispose(); return; }
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.needsUpdate = true;
+        setLoadedTexture((prev) => { prev?.dispose(); return tex; });
+        invalidate();
+      },
+      undefined,
+      (err) => {
+        console.warn('[depth] failed to load object texture', err);
+      },
+    );
     return () => { cancelled = true; };
-  }, [objectTexture]);
+  }, [objectTexture, invalidate]);
 
   // Final unmount cleanup — covers the case where the component goes away
   // without `objectTexture` flipping to null first. We track the latest
@@ -589,11 +598,14 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     if (material === 'plastic') {
       base.clearcoat = clearcoat;
     }
-    if (loadedTexture) {
+    // Phone/tablet/laptop keep the PNG on the dedicated screen plate — don't
+    // also wrap it across the body UVs (looks like a broken sticker).
+    const screenDevice = objectType === 'phone' || objectType === 'tablet' || objectType === 'laptop';
+    if (loadedTexture && !screenDevice) {
       base.map = loadedTexture;
     }
     return base;
-  }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity, loadedTexture]);
+  }, [color, roughness, metalness, material, transmission, ior, opacity, clearcoat, reflectivity, loadedTexture, objectType]);
 
   // Drag handlers
   const onPointerDown = useCallback((e: ThreeEvent<PointerEvent>) => {
@@ -847,46 +859,48 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
           ))}
         </mesh>
 
-        {/* Device screen plates — faceTextures.front (or global texture) shows here */}
+        {/* Device screen plates — faceTextures.front (or global texture) shows here.
+            Use MeshBasicMaterial so artwork stays readable regardless of scene lighting.
+            Sit the plate clearly in front of the beveled phone body. */}
         {objectType === 'phone' && (
           <mesh
-            position={[0, 0.02, 0.038]}
+            position={[0, 0.02, 0.055]}
             castShadow={false}
-            receiveShadow
+            receiveShadow={false}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerOut}
           >
             <planeGeometry args={[0.58, 1.2]} />
-            <meshStandardMaterial
-              map={loadedFaceTextures.front ?? loadedTexture}
+            <meshBasicMaterial
+              key={loadedFaceTextures.front?.uuid ?? loadedTexture?.uuid ?? 'phone-screen-empty'}
+              map={loadedFaceTextures.front ?? loadedTexture ?? null}
               color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
-              roughness={0.4}
-              metalness={0.05}
-              toneMapped={!(loadedFaceTextures.front || loadedTexture)}
+              toneMapped={false}
+              side={THREE.DoubleSide}
             />
           </mesh>
         )}
 
         {objectType === 'tablet' && (
           <mesh
-            position={[0, 0.028, 0]}
+            position={[0, 0.035, 0]}
             rotation={[-Math.PI / 2, 0, 0]}
             castShadow={false}
-            receiveShadow
+            receiveShadow={false}
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerLeave={onPointerOut}
           >
             <planeGeometry args={[1.05, 1.5]} />
-            <meshStandardMaterial
-              map={loadedFaceTextures.front ?? loadedTexture}
+            <meshBasicMaterial
+              key={loadedFaceTextures.front?.uuid ?? loadedTexture?.uuid ?? 'tablet-screen-empty'}
+              map={loadedFaceTextures.front ?? loadedTexture ?? null}
               color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
-              roughness={0.4}
-              metalness={0.05}
-              toneMapped={!(loadedFaceTextures.front || loadedTexture)}
+              toneMapped={false}
+              side={THREE.DoubleSide}
             />
           </mesh>
         )}
@@ -907,24 +921,23 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
               <boxGeometry args={[1.0, 0.62, 0.02]} />
               <meshStandardMaterial color="#1a1a1a" roughness={0.45} metalness={0.2} />
             </mesh>
-            {/* Display content */}
+            {/* Display content — slightly in front of the bezel */}
             <mesh
-              position={[0, 0.28, -0.308]}
+              position={[0, 0.28, -0.295]}
               rotation={[(-100 * Math.PI) / 180, 0, 0]}
               castShadow={false}
-              receiveShadow
+              receiveShadow={false}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerLeave={onPointerOut}
             >
               <planeGeometry args={[0.9, 0.52]} />
-              <meshStandardMaterial
-                map={loadedFaceTextures.front ?? loadedTexture}
+              <meshBasicMaterial
+                key={loadedFaceTextures.front?.uuid ?? loadedTexture?.uuid ?? 'laptop-screen-empty'}
+                map={loadedFaceTextures.front ?? loadedTexture ?? null}
                 color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
-                roughness={0.35}
-                metalness={0.05}
-                toneMapped={!(loadedFaceTextures.front || loadedTexture)}
+                toneMapped={false}
               />
             </mesh>
           </>
