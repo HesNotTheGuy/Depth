@@ -379,32 +379,45 @@ export function CompositeViewport() {
       return;
     }
 
-    // Resolve target: most-recent hover, else selected object, else nothing.
+    // Resolve target: most-recent hover, else selected object.
+    // No target → create a flat Image plate from the PNG (primary mockup-art path).
     const hover = useHoverStore.getState().latest;
     const sceneState = useSceneStore.getState();
-    const targetId = hover?.objectId ?? sceneState.selectedObjectId;
-    if (!targetId) {
-      setDropFeedback({ message: 'Drop on an object or select one first', type: 'error' });
-      return;
-    }
-    const targetObj = sceneState.objects.find((o) => o.id === targetId);
-    if (!targetObj) return;
+    let targetId = hover?.objectId ?? sceneState.selectedObjectId;
 
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result;
       if (typeof dataUrl !== 'string') return;
 
-      // Decide face-texture vs global-texture.
-      // Per-face textures only render for box/card (the multi-material path in
-      // SceneObject). For other shapes we fall back to the global object texture.
+      if (!targetId) {
+        const id = useSceneStore.getState().addObject('image');
+        useSceneStore.getState().updateObject(id, { texture: dataUrl, name: file.name.replace(/\.[^.]+$/, '') || 'Image' });
+        setDropFeedback({ message: `Added PNG as image plate`, type: 'success' });
+        setFlashTarget(true);
+        return;
+      }
+
+      const targetObj = useSceneStore.getState().objects.find((o) => o.id === targetId);
+      if (!targetObj) return;
+
+      // Phone / tablet / laptop: PNG goes on the screen (faceTextures.front)
+      // so it actually shows on the screen plate mesh.
+      const screenTypes = new Set(['phone', 'tablet', 'laptop']);
       const face = hover?.face;
       const shapeSupportsPerFace = targetObj.type === 'box' || targetObj.type === 'card';
       const isNamedFace = face != null && BOX_FACE_NAMES.has(face);
 
-      if (shapeSupportsPerFace && isNamedFace) {
-        // setFaceTextureForSelected operates on the selected object; ensure that.
-        if (sceneState.selectedObjectId !== targetId) selectObject(targetId);
+      if (screenTypes.has(targetObj.type)) {
+        if (useSceneStore.getState().selectedObjectId !== targetId) selectObject(targetId);
+        setFaceTextureForSelected('front', dataUrl);
+        updateObject(targetId, { texture: dataUrl });
+        setDropFeedback({ message: `Applied PNG to ${targetObj.name} screen`, type: 'success' });
+      } else if (targetObj.type === 'image') {
+        updateObject(targetId, { texture: dataUrl });
+        setDropFeedback({ message: `Updated image plate`, type: 'success' });
+      } else if (shapeSupportsPerFace && isNamedFace) {
+        if (useSceneStore.getState().selectedObjectId !== targetId) selectObject(targetId);
         setFaceTextureForSelected(face, dataUrl);
         setDropFeedback({ message: `Applied image to ${targetObj.name} (${face} face)`, type: 'success' });
       } else {

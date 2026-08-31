@@ -23,7 +23,12 @@ import {
   type SavedSceneMeta,
 } from './scenePersistence';
 
-export type ObjectPreset = 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus' | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut' | 'laptop' | 'tablet' | 'can' | 'book' | 'custom';
+export type ObjectPreset =
+  | 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus'
+  | 'mug' | 'phone' | 'bottle' | 'bag' | 'card' | 'donut'
+  | 'laptop' | 'tablet' | 'can' | 'book'
+  | 'image' // flat PNG/JPG mockup plate (the primary artwork path)
+  | 'custom';
 
 export type ExportFormat = 'png' | 'jpeg' | 'webp';
 export type BlendMode = 'normal' | 'multiply' | 'screen' | 'overlay';
@@ -170,6 +175,7 @@ const PRESET_LABELS: Record<ObjectPreset, string> = {
   tablet: 'Tablet',
   can: 'Can',
   book: 'Book',
+  image: 'Image',
   custom: 'Custom',
 };
 
@@ -242,6 +248,16 @@ export function makeDefaultObject(type: ObjectPreset, nameSuffix = 1): SceneObje
     base.color = '#F5F5F5';
     base.material = 'matte';
     base.roughness = 0.85;
+  }
+  if (type === 'image') {
+    // Flat PNG plate facing the camera — drop your mockup artwork on it.
+    base.color = '#ffffff';
+    base.material = 'matte';
+    base.roughness = 1;
+    base.metalness = 0;
+    base.position = { x: 0, y: 0.6, z: 0 };
+    base.rotation = { x: 0, y: 0, z: 0 };
+    base.scale = 1.2;
   }
   return base;
 }

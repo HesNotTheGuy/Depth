@@ -1,8 +1,9 @@
 import { useCallback, useRef } from 'react';
 import { useSceneStore, makeDefaultObject, type ObjectPreset } from '../../store/useSceneStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
-import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen, Plus, Eye, EyeOff, Trash2, Copy, CircleDot } from 'lucide-react';
+import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen, Plus, Eye, EyeOff, Trash2, Copy, CircleDot, Image as ImageIcon } from 'lucide-react';
 import { SliderInput, Vec3SliderInput } from '../ui/SliderInput';
+import { validateImageWithModal } from '../../utils/uploadLimits';
 
 const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'box', label: 'Cube', icon: <Box size={18} /> },
@@ -13,6 +14,7 @@ const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
 ];
 
 const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
+  { id: 'image', label: 'Image', icon: <ImageIcon size={18} /> },
   { id: 'mug', label: 'Mug', icon: <Coffee size={18} /> },
   { id: 'phone', label: 'Phone', icon: <Smartphone size={18} /> },
   { id: 'bottle', label: 'Bottle', icon: <Wine size={18} /> },
@@ -44,6 +46,7 @@ export function ObjectPanel() {
   const updateSelected = useSceneStore((s) => s.updateSelected);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pngInputRef = useRef<HTMLInputElement>(null);
 
   const handleObjUpload = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -59,6 +62,30 @@ export function ObjectPanel() {
       }
       // Allow re-selecting the same file.
       e.target.value = '';
+    },
+    [selected, updateSelected, addObject]
+  );
+
+  const handlePngUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (!file) return;
+      if (!(await validateImageWithModal(file))) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result;
+        if (typeof dataUrl !== 'string') return;
+        const name = file.name.replace(/\.[^.]+$/, '') || 'Image';
+        // If an image plate is selected, replace its artwork; otherwise add a new plate.
+        if (selected?.type === 'image') {
+          updateSelected({ texture: dataUrl, name });
+        } else {
+          const id = addObject('image');
+          useSceneStore.getState().updateObject(id, { texture: dataUrl, name });
+        }
+      };
+      reader.readAsDataURL(file);
     },
     [selected, updateSelected, addObject]
   );
@@ -93,19 +120,38 @@ export function ObjectPanel() {
   return (
     <div>
       {/* Objects list */}
-      <div className="flex items-center justify-between mb-2.5">
+      <div className="flex items-center justify-between mb-2.5 gap-2">
         <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest block">
           Objects
         </label>
-        <button
-          onClick={() => addObject(selected?.type ?? 'box')}
-          className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/15 hover:bg-primary/25 text-primary text-[10px] font-medium transition-colors"
-          title="Add a new object"
-        >
-          <Plus size={11} />
-          Add
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => pngInputRef.current?.click()}
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-primary/15 hover:bg-primary/25 text-primary text-[10px] font-medium transition-colors"
+            title="Add a flat PNG/JPG mockup plate"
+            data-testid="add-png-button"
+          >
+            <ImageIcon size={11} />
+            Add PNG
+          </button>
+          <button
+            onClick={() => addObject(selected?.type ?? 'box')}
+            className="flex items-center gap-1 px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-text-secondary text-[10px] font-medium transition-colors"
+            title="Add a new object"
+          >
+            <Plus size={11} />
+            Add
+          </button>
+        </div>
       </div>
+      <input
+        ref={pngInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/*"
+        className="hidden"
+        data-testid="png-mockup-input"
+        onChange={handlePngUpload}
+      />
       <div className="space-y-1 mb-5">
         {objects.length === 0 && (
           <p className="text-[10px] text-text-muted">No objects in scene. Click Add.</p>
@@ -174,7 +220,7 @@ export function ObjectPanel() {
             {shapes.map((shape) => (
               <button
                 key={shape.id}
-                onClick={() => updateSelected({ type: shape.id })}
+                onClick={() => addPresetButton(shape.id)}
                 className={`flex flex-col items-center gap-1 py-2.5 rounded-lg text-[10px] font-medium transition-all ${
                   selected.type === shape.id
                     ? 'bg-primary/15 text-primary ring-1 ring-primary/30'

@@ -80,8 +80,8 @@ const STEPS = [
   },
   {
     icon: Box,
-    title: 'Place a 3D object',
-    desc: 'Mug, phone, bottle, bag — or a primitive. Drag it into place.',
+    title: 'Place your mockup PNG',
+    desc: 'Drop artwork onto a phone screen, or add a flat image plate.',
   },
   {
     icon: Sun,
@@ -92,7 +92,7 @@ const STEPS = [
 
 const FEATURES = [
   { icon: Sun, title: 'Auto lighting', desc: 'Estimates direction, brightness, and color from your plate' },
-  { icon: Smartphone, title: 'Mockup library', desc: 'Phone, mug, bottle, bag, card, laptop, and more' },
+  { icon: Smartphone, title: 'PNG on mockups', desc: 'Drop a screen design onto phone, tablet, or laptop' },
   { icon: Palette, title: 'Materials', desc: 'Matte, metal, glass, wood, marble, fabric, leather' },
   { icon: Layers, title: 'Surface planes', desc: 'Draw quads so objects sit on desks and floors' },
   { icon: Download, title: 'Clean export', desc: 'PNG at 1× / 2× / 4×, or layered passes for Photoshop' },
@@ -167,7 +167,7 @@ export function LandingPage() {
             Drop in a photo. Place a 3D object. The lighting just matches.
           </p>
           <p className="landing-hero-sub">
-            Product mockups for designers who don&apos;t need Blender.
+            Drop a PNG onto a phone screen or image plate — lighting matches the photo.
           </p>
           <div className="landing-hero-actions">
             <button type="button" onClick={goToApp} className="landing-cta-primary group">

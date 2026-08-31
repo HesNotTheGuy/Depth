@@ -145,32 +145,23 @@ test.describe('Use cases', () => {
     // Confirm the store actually changed type to phone.
     await expect.poll(async () => (await readStore(page)).objects[0]?.type).toBe('phone');
 
-    // Switch to Material tab.
+    // Material tab — screen PNG is the primary path for phone mockups.
     await page.getByRole('button', { name: /^material$/i }).click();
 
-    // The "Face Placement" label is always present. With no face selected the
-    // panel shows hint text — we drive selection through the store rather than
-    // trying to click a specific face on the 3D canvas (3D hit-testing in
-    // headless chromium is flaky).
-    await expect(page.getByText(/face placement/i)).toBeVisible();
-    await setStore(page, { selectedFace: 'front' });
-    await expect(page.getByText(/Selected: front/i)).toBeVisible();
-
-    // Inject the face texture via the dedicated hidden input.
     const tex = await synthesizeColorPng(page, '#22c55e');
-    await page.locator('[data-testid="face-texture-input"]').setInputFiles({
+    await page.locator('[data-testid="screen-texture-input"]').setInputFiles({
       name: 'screen.png',
       mimeType: 'image/png',
       buffer: tex,
     });
 
-    // Assert the face texture made it into the store.
+    // Assert the screen texture made it into faceTextures.front (and global texture).
     await expect
       .poll(async () => {
         const s = await readStore(page);
-        return Object.keys(s.objects[0]?.faceTextures ?? {}).length;
+        return s.objects[0]?.faceTextures?.front?.url ?? '';
       }, { timeout: 5000 })
-      .toBeGreaterThan(0);
+      .toMatch(/^data:image\//);
 
     // Export tab + PNG export.
     await page.getByRole('button', { name: /^export$/i }).first().click();
@@ -183,6 +174,27 @@ test.describe('Use cases', () => {
     const stat = await fs.stat(path!);
     expect(stat.size).toBeGreaterThan(1024);
     expect(download.suggestedFilename()).toMatch(/\.png$/);
+  });
+
+  test('1b. Flat PNG image plate via Add PNG', async ({ page }) => {
+    await openEditor(page);
+
+    await page.getByRole('button', { name: /^object$/i }).click();
+
+    const art = await synthesizeColorPng(page, '#f59e0b');
+    await page.locator('[data-testid="png-mockup-input"]').setInputFiles({
+      name: 'mockup-art.png',
+      mimeType: 'image/png',
+      buffer: art,
+    });
+
+    await expect
+      .poll(async () => {
+        const s = await readStore(page);
+        const img = s.objects.find((o) => o.type === 'image');
+        return img?.texture ?? '';
+      }, { timeout: 5000 })
+      .toMatch(/^data:image\//);
   });
 
   test('2. Mug mockup with a global logo texture', async ({ page }) => {

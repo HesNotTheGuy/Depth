@@ -143,7 +143,8 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
       return merged ?? new THREE.CylinderGeometry(0.35, 0.35, 0.8, 32);
     }
     case 'phone': {
-      // Standing phone: screen faces +Z (toward the default camera).
+      // Body only — the screen is a separate mesh in SceneObject so a PNG
+      // can map onto it without multi-material group hacks.
       const w = 0.38;
       const h = 0.78;
       const r = 0.06;
@@ -166,23 +167,15 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
         bevelSegments: 3,
       });
       body.translate(0, 0, -depth / 2);
-
-      // Slightly inset screen plate so the mockup reads as a phone, not a slab.
-      // ExtrudeGeometry is non-indexed; BoxGeometry is indexed — convert so merge works.
-      const screenBox = new THREE.BoxGeometry(w * 1.7, h * 1.75, 0.008);
-      const screen = screenBox.toNonIndexed();
-      screenBox.dispose();
-      screen.translate(0, 0.02, depth / 2 + 0.002);
-
-      const merged = mergeGeometries([body, screen], false);
-      screen.dispose();
-      const geo = merged ?? body;
-      if (merged) body.dispose();
-      geo.computeBoundingBox();
+      body.computeBoundingBox();
       const center = new THREE.Vector3();
-      geo.boundingBox!.getCenter(center);
-      geo.translate(-center.x, -center.y, -center.z);
-      return geo;
+      body.boundingBox!.getCenter(center);
+      body.translate(-center.x, -center.y, -center.z);
+      return body;
+    }
+    case 'image': {
+      // Unit plane; aspect is corrected at render time from the texture.
+      return new THREE.PlaneGeometry(1, 1);
     }
     case 'bottle': {
       const pts: THREE.Vector2[] = [];
@@ -241,25 +234,10 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
     case 'card':
       return new THREE.BoxGeometry(0.875, 0.5, 0.01);
     case 'laptop': {
+      // Keyboard deck only — the display is a separate mesh so a PNG can
+      // map onto the screen without multi-material group hacks.
       const base = new THREE.BoxGeometry(1.0, 0.05, 0.7);
       base.translate(0, -0.025, 0);
-      const screen = new THREE.BoxGeometry(1.0, 0.6, 0.03);
-      screen.translate(0, 0.3, -0.015);
-      const tilt = (100 * Math.PI) / 180;
-      screen.rotateX(-tilt);
-      screen.translate(0, 0, -0.35);
-      const merged = mergeGeometries([base, screen], false);
-      if (merged) {
-        base.dispose();
-        screen.dispose();
-        merged.computeBoundingBox();
-        const c = new THREE.Vector3();
-        merged.boundingBox!.getCenter(c);
-        merged.translate(-c.x, -c.y, -c.z);
-        return merged;
-      }
-      // Merge failed — keep base, drop the unused screen intermediate.
-      screen.dispose();
       return base;
     }
     case 'tablet': {
@@ -369,6 +347,7 @@ function getObjectHalfHeight(type: string, scale: number): number {
     case 'tablet': return 0.85 * scale;
     case 'can': return 0.4 * scale;
     case 'book': return 0.5 * scale;
+    case 'image': return 0.5 * scale;
     case 'custom': return 0.5 * scale;
     default: return 0.5 * scale;
   }
@@ -468,6 +447,23 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     loadedTexture.needsUpdate = true;
     invalidate();
   }, [loadedTexture, textureRepeat, textureOffset, textureRotation, invalidate]);
+
+  // Image plates: resize the unit plane to match the PNG's aspect ratio.
+  useEffect(() => {
+    if (objectType !== 'image' || !geometry || !loadedTexture?.image) return;
+    const img = loadedTexture.image as { width?: number; height?: number };
+    const w = img.width ?? 1;
+    const h = img.height ?? 1;
+    const aspect = w / Math.max(1, h);
+    const planeW = aspect >= 1 ? 1 : aspect;
+    const planeH = aspect >= 1 ? 1 / aspect : 1;
+    const next = new THREE.PlaneGeometry(planeW, planeH);
+    geometry.copy(next);
+    next.dispose();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    invalidate();
+  }, [objectType, geometry, loadedTexture, invalidate]);
 
   // Face textures. Same disposal discipline as the global texture: previous
   // textures must be released before swapping in fresh ones, otherwise every
@@ -825,7 +821,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
       <group ref={(el) => { groupRef.current = el; if (el && !groupReady) setGroupReady(true); }}>
         <mesh
           ref={meshRef}
-          castShadow
+          castShadow={objectType !== 'image'}
           receiveShadow
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -834,12 +830,106 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
         >
           <primitive object={geometry} attach="geometry" />
           {!useMultiMaterial && (needsPhysical ? (
-            <meshPhysicalMaterial {...singleMaterial} />
+            <meshPhysicalMaterial
+              {...singleMaterial}
+              {...(objectType === 'image'
+                ? { transparent: true, alphaTest: 0.05, side: THREE.DoubleSide, depthWrite: true }
+                : {})}
+            />
           ) : (
-            <meshStandardMaterial {...singleMaterial} />
+            <meshStandardMaterial
+              {...singleMaterial}
+              {...(objectType === 'image'
+                ? { transparent: true, alphaTest: 0.05, side: THREE.DoubleSide, depthWrite: true }
+                : {})}
+            />
           ))}
         </mesh>
-        {isSelected && geometry && (
+
+        {/* Device screen plates — faceTextures.front (or global texture) shows here */}
+        {objectType === 'phone' && (
+          <mesh
+            position={[0, 0.02, 0.038]}
+            castShadow={false}
+            receiveShadow
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerOut}
+          >
+            <planeGeometry args={[0.58, 1.2]} />
+            <meshStandardMaterial
+              map={loadedFaceTextures.front ?? loadedTexture}
+              color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
+              roughness={0.4}
+              metalness={0.05}
+              toneMapped={!(loadedFaceTextures.front || loadedTexture)}
+            />
+          </mesh>
+        )}
+
+        {objectType === 'tablet' && (
+          <mesh
+            position={[0, 0.028, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            castShadow={false}
+            receiveShadow
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerLeave={onPointerOut}
+          >
+            <planeGeometry args={[1.05, 1.5]} />
+            <meshStandardMaterial
+              map={loadedFaceTextures.front ?? loadedTexture}
+              color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
+              roughness={0.4}
+              metalness={0.05}
+              toneMapped={!(loadedFaceTextures.front || loadedTexture)}
+            />
+          </mesh>
+        )}
+
+        {objectType === 'laptop' && (
+          <>
+            {/* Display bezel */}
+            <mesh
+              position={[0, 0.28, -0.32]}
+              rotation={[(-100 * Math.PI) / 180, 0, 0]}
+              castShadow
+              receiveShadow
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerOut}
+            >
+              <boxGeometry args={[1.0, 0.62, 0.02]} />
+              <meshStandardMaterial color="#1a1a1a" roughness={0.45} metalness={0.2} />
+            </mesh>
+            {/* Display content */}
+            <mesh
+              position={[0, 0.28, -0.308]}
+              rotation={[(-100 * Math.PI) / 180, 0, 0]}
+              castShadow={false}
+              receiveShadow
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={onPointerUp}
+              onPointerLeave={onPointerOut}
+            >
+              <planeGeometry args={[0.9, 0.52]} />
+              <meshStandardMaterial
+                map={loadedFaceTextures.front ?? loadedTexture}
+                color={loadedFaceTextures.front || loadedTexture ? '#ffffff' : '#0a0a0a'}
+                roughness={0.35}
+                metalness={0.05}
+                toneMapped={!(loadedFaceTextures.front || loadedTexture)}
+              />
+            </mesh>
+          </>
+        )}
+
+        {isSelected && geometry && objectType !== 'image' && (
           <lineSegments raycast={() => null} renderOrder={2}>
             <edgesGeometry args={[geometry, 55]} />
             <lineBasicMaterial color="#a78bfa" transparent opacity={0.75} />
