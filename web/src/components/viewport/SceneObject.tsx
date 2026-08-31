@@ -448,23 +448,6 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     invalidate();
   }, [loadedTexture, textureRepeat, textureOffset, textureRotation, invalidate]);
 
-  // Image plates: resize the unit plane to match the PNG's aspect ratio.
-  useEffect(() => {
-    if (objectType !== 'image' || !geometry || !loadedTexture?.image) return;
-    const img = loadedTexture.image as { width?: number; height?: number };
-    const w = img.width ?? 1;
-    const h = img.height ?? 1;
-    const aspect = w / Math.max(1, h);
-    const planeW = aspect >= 1 ? 1 : aspect;
-    const planeH = aspect >= 1 ? 1 / aspect : 1;
-    const next = new THREE.PlaneGeometry(planeW, planeH);
-    geometry.copy(next);
-    next.dispose();
-    geometry.computeBoundingBox();
-    geometry.computeBoundingSphere();
-    invalidate();
-  }, [objectType, geometry, loadedTexture, invalidate]);
-
   // Face textures. Same disposal discipline as the global texture: previous
   // textures must be released before swapping in fresh ones, otherwise every
   // edit to a faceTextures entry leaks a GPU texture.
@@ -557,6 +540,24 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     return () => { prevPrimitiveRef.current?.dispose(); };
   }, []);
   const geometry = objectType === 'custom' ? customGeometry : primitiveGeometry;
+
+  // Image plates: resize the unit plane to match the PNG's aspect ratio.
+  // Must run after `geometry` is declared — referencing it earlier hits TDZ.
+  useEffect(() => {
+    if (objectType !== 'image' || !geometry || !loadedTexture?.image) return;
+    const img = loadedTexture.image as { width?: number; height?: number };
+    const w = img.width ?? 1;
+    const h = img.height ?? 1;
+    const aspect = w / Math.max(1, h);
+    const planeW = aspect >= 1 ? 1 : aspect;
+    const planeH = aspect >= 1 ? 1 / aspect : 1;
+    const next = new THREE.PlaneGeometry(planeW, planeH);
+    geometry.copy(next);
+    next.dispose();
+    geometry.computeBoundingBox();
+    geometry.computeBoundingSphere();
+    invalidate();
+  }, [objectType, geometry, loadedTexture, invalidate]);
 
   const needsPhysical = material === 'glass' || material === 'plastic';
 

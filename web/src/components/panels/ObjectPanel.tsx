@@ -1,7 +1,31 @@
 import { useCallback, useRef } from 'react';
 import { useSceneStore, makeDefaultObject, type ObjectPreset } from '../../store/useSceneStore';
 import { useSelectedObject } from '../../hooks/useSelectedObject';
-import { Box, Circle, Triangle, Cylinder as CylinderIcon, Hexagon, Upload, X, Coffee, Smartphone, Wine, ShoppingBag, CreditCard, Laptop, Tablet, CupSoda, BookOpen, Plus, Eye, EyeOff, Trash2, Copy, CircleDot, Image as ImageIcon } from 'lucide-react';
+import {
+  Box,
+  Circle,
+  Triangle,
+  Cylinder as CylinderIcon,
+  Hexagon,
+  Upload,
+  X,
+  Coffee,
+  Smartphone,
+  Wine,
+  ShoppingBag,
+  CreditCard,
+  Laptop,
+  Tablet,
+  CupSoda,
+  BookOpen,
+  Plus,
+  Eye,
+  EyeOff,
+  Trash2,
+  Copy,
+  CircleDot,
+  Image as ImageIcon,
+} from 'lucide-react';
 import { SliderInput, Vec3SliderInput } from '../ui/SliderInput';
 import { validateImageWithModal } from '../../utils/uploadLimits';
 
@@ -13,10 +37,14 @@ const shapes: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'torus', label: 'Torus', icon: <Hexagon size={18} /> },
 ];
 
+/** Primary mockup paths — kept above the fold so PNG workflows stay one click away. */
+const featuredMockups: { id: ObjectPreset; label: string; hint: string; icon: React.ReactNode }[] = [
+  { id: 'image', label: 'Image', hint: 'Flat PNG plate', icon: <ImageIcon size={18} /> },
+  { id: 'phone', label: 'Phone', hint: 'Screen mockup', icon: <Smartphone size={18} /> },
+];
+
 const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
-  { id: 'image', label: 'Image', icon: <ImageIcon size={18} /> },
   { id: 'mug', label: 'Mug', icon: <Coffee size={18} /> },
-  { id: 'phone', label: 'Phone', icon: <Smartphone size={18} /> },
   { id: 'bottle', label: 'Bottle', icon: <Wine size={18} /> },
   { id: 'bag', label: 'Bag', icon: <ShoppingBag size={18} /> },
   { id: 'card', label: 'Card', icon: <CreditCard size={18} /> },
@@ -27,7 +55,11 @@ const mockups: { id: ObjectPreset; label: string; icon: React.ReactNode }[] = [
   { id: 'book', label: 'Book', icon: <BookOpen size={18} /> },
 ];
 
-const ALL_PRESETS = [...shapes, ...mockups];
+const ALL_PRESETS = [
+  ...shapes,
+  ...featuredMockups.map(({ id, label, icon }) => ({ id, label, icon })),
+  ...mockups,
+];
 
 function iconForType(type: ObjectPreset): React.ReactNode {
   const found = ALL_PRESETS.find((p) => p.id === type);
@@ -60,7 +92,6 @@ export function ObjectPanel() {
         const id = addObject('custom');
         useSceneStore.getState().updateObject(id, { customModelUrl: url });
       }
-      // Allow re-selecting the same file.
       e.target.value = '';
     },
     [selected, updateSelected, addObject]
@@ -77,7 +108,6 @@ export function ObjectPanel() {
         const dataUrl = reader.result;
         if (typeof dataUrl !== 'string') return;
         const name = file.name.replace(/\.[^.]+$/, '') || 'Image';
-        // If an image plate is selected, replace its artwork; otherwise add a new plate.
         if (selected?.type === 'image') {
           updateSelected({ texture: dataUrl, name });
         } else {
@@ -99,8 +129,6 @@ export function ObjectPanel() {
   const addPresetButton = (preset: ObjectPreset) => {
     if (selected) {
       if (selected.customModelUrl) URL.revokeObjectURL(selected.customModelUrl);
-      // Apply preset defaults (rotation/color/material) so Cube → Phone
-      // doesn't leave a flat grey slab with identity rotation.
       const defaults = makeDefaultObject(preset);
       updateSelected({
         type: preset,
@@ -119,7 +147,6 @@ export function ObjectPanel() {
 
   return (
     <div>
-      {/* Objects list */}
       <div className="flex items-center justify-between mb-2.5 gap-2">
         <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest block">
           Objects
@@ -152,6 +179,7 @@ export function ObjectPanel() {
         data-testid="png-mockup-input"
         onChange={handlePngUpload}
       />
+
       <div className="space-y-1 mb-5">
         {objects.length === 0 && (
           <p className="text-[10px] text-text-muted">No objects in scene. Click Add.</p>
@@ -171,11 +199,18 @@ export function ObjectPanel() {
               <span className={`shrink-0 ${isSel ? 'text-primary' : 'text-text-muted'}`}>
                 {iconForType(o.type)}
               </span>
-              <span className={`flex-1 min-w-0 truncate text-[11px] ${isSel ? 'text-primary font-medium' : 'text-text-primary'}`}>
+              <span
+                className={`flex-1 min-w-0 truncate text-[11px] ${
+                  isSel ? 'text-primary font-medium' : 'text-text-primary'
+                }`}
+              >
                 {o.name}
               </span>
               <button
-                onClick={(e) => { e.stopPropagation(); setObjectVisible(o.id, !o.visible); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setObjectVisible(o.id, !o.visible);
+                }}
                 className="p-1 rounded hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
                 title={o.visible ? 'Hide' : 'Show'}
                 aria-label={`${o.visible ? 'Hide' : 'Show'} ${o.name}`}
@@ -183,7 +218,10 @@ export function ObjectPanel() {
                 {o.visible ? <Eye size={12} /> : <EyeOff size={12} />}
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); duplicateObject(o.id); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  duplicateObject(o.id);
+                }}
                 className="p-1 rounded hover:bg-white/10 text-text-muted hover:text-text-primary transition-colors"
                 title="Duplicate"
                 aria-label={`Duplicate ${o.name}`}
@@ -237,6 +275,30 @@ export function ObjectPanel() {
           <label className="text-[11px] font-semibold text-text-muted uppercase tracking-widest mb-2.5 block mt-4">
             Mockups
           </label>
+          <div className="grid grid-cols-2 gap-1.5 mb-2">
+            {featuredMockups.map((shape) => (
+              <button
+                key={shape.id}
+                onClick={() => addPresetButton(shape.id)}
+                className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg text-left transition-all ${
+                  selected.type === shape.id
+                    ? 'bg-primary/15 text-primary ring-1 ring-primary/30'
+                    : 'bg-white/[0.03] text-text-muted hover:bg-white/[0.06] hover:text-text-secondary'
+                }`}
+                title={shape.label}
+              >
+                <span className="shrink-0" aria-hidden>
+                  {shape.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-[11px] font-medium">{shape.label}</span>
+                  <span className="block text-[9px] opacity-70" aria-hidden>
+                    {shape.hint}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
           <div className="grid grid-cols-5 gap-1.5 mb-2">
             {mockups.map((shape) => (
               <button
@@ -255,11 +317,12 @@ export function ObjectPanel() {
             ))}
           </div>
 
-          {/* Custom OBJ upload */}
           {selected.type === 'custom' && selected.customModelUrl ? (
             <div className="mb-5 flex items-center gap-2 px-3 py-2 bg-primary/10 border border-primary/20 rounded-lg">
               <Upload size={13} className="text-primary shrink-0" />
-              <span className="text-[11px] text-primary font-medium truncate flex-1">Custom model loaded</span>
+              <span className="text-[11px] text-primary font-medium truncate flex-1">
+                Custom model loaded
+              </span>
               <button
                 onClick={clearCustomModel}
                 className="p-0.5 hover:bg-white/10 rounded text-primary/60 hover:text-primary transition-colors"
