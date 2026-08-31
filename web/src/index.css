@@ -226,41 +226,35 @@ input[type="color"]::-webkit-color-swatch {
 .landing-hero {
   position: relative;
   min-height: 100vh;
-  display: grid;
-  align-items: end;
+  display: flex;
+  align-items: flex-end;
   padding-top: 3.75rem;
+  overflow: hidden;
 }
-@media (min-width: 960px) {
-  .landing-hero {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
-    align-items: center;
-    gap: 1rem;
-    padding-inline: 3rem;
-  }
+@media (min-width: 900px) {
+  .landing-hero { align-items: center; }
 }
 
 .landing-hero-copy {
   position: relative;
   z-index: 2;
-  padding: 3.5rem 1.5rem 1.5rem;
-  max-width: 36rem;
+  padding: 3.5rem 1.5rem 4rem;
+  max-width: 34rem;
   animation: fadeIn 0.7s ease-out both;
 }
-@media (min-width: 960px) {
-  .landing-hero-copy { padding: 2rem 0 2rem 0; }
+@media (min-width: 768px) {
+  .landing-hero-copy { padding: 4rem 3rem 5rem; }
 }
 
 .landing-hero-brand {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: clamp(3.5rem, 10vw, 6.5rem);
+  font-size: clamp(3.75rem, 11vw, 7rem);
   letter-spacing: -0.05em;
-  line-height: 0.95;
+  line-height: 0.92;
   margin: 0;
-  background: linear-gradient(180deg, #fff 20%, #A0A0B8 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #fff;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.45);
 }
 
 .landing-hero-tagline {
@@ -270,13 +264,14 @@ input[type="color"]::-webkit-color-swatch {
   font-size: clamp(1.15rem, 2.4vw, 1.55rem);
   line-height: 1.35;
   letter-spacing: -0.02em;
-  color: var(--color-text-primary);
+  color: #F0F0F5;
+  text-shadow: 0 1px 18px rgba(0, 0, 0, 0.5);
 }
 
 .landing-hero-sub {
   margin-top: 0.75rem;
   font-size: 1rem;
-  color: var(--color-text-secondary);
+  color: rgba(240, 240, 245, 0.78);
   line-height: 1.5;
   max-width: 28rem;
 }
@@ -312,28 +307,22 @@ input[type="color"]::-webkit-color-swatch {
   font-size: 1rem;
   font-weight: 500;
   border-radius: 0.75rem;
-  color: var(--color-text-secondary);
-  border: 1px solid var(--color-panel-border);
+  color: rgba(240, 240, 245, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 10, 15, 0.35);
+  backdrop-filter: blur(8px);
   transition: color 0.15s ease, border-color 0.15s ease;
 }
 .landing-cta-secondary:hover {
-  color: var(--color-text-primary);
-  border-color: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .landing-hero-visual {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  min-height: 42vh;
-  animation: fadeIn 0.9s ease-out 0.15s both;
-}
-@media (min-width: 960px) {
-  .landing-hero-visual {
-    min-height: calc(100vh - 3.75rem);
-    display: flex;
-    align-items: center;
-  }
+  position: absolute;
+  inset: 3.75rem 0 0 0;
+  z-index: 0;
+  animation: fadeIn 1s ease-out 0.1s both;
 }
 
 .landing-hero-image {
@@ -341,15 +330,17 @@ input[type="color"]::-webkit-color-swatch {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center left;
-  mask-image: linear-gradient(to top, transparent 0%, #000 18%, #000 100%);
+  object-position: center top;
 }
-@media (min-width: 960px) {
-  .landing-hero-image {
-    mask-image: linear-gradient(to right, transparent 0%, #000 12%, #000 100%);
-    border-radius: 0;
-    max-height: calc(100vh - 3.75rem);
-  }
+
+.landing-hero-visual::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(10, 10, 15, 0.92) 0%, rgba(10, 10, 15, 0.72) 42%, rgba(10, 10, 15, 0.25) 72%, rgba(10, 10, 15, 0.35) 100%),
+    linear-gradient(180deg, rgba(10, 10, 15, 0.35) 0%, transparent 28%, rgba(10, 10, 15, 0.55) 100%);
+  pointer-events: none;
 }
 
 .landing-section {

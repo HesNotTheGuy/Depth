@@ -151,6 +151,16 @@ export function LandingPage() {
 
       {/* Hero — one composition: brand, pitch, CTA, dominant product shot */}
       <section className="landing-hero">
+        <div className="landing-hero-visual" aria-hidden="true">
+          <img
+            src="/screenshots/editor.png"
+            alt=""
+            className="landing-hero-image"
+            width={1440}
+            height={900}
+          />
+        </div>
+
         <div className="landing-hero-copy">
           <h1 className="landing-hero-brand">Depth</h1>
           <p className="landing-hero-tagline">
@@ -169,16 +179,6 @@ export function LandingPage() {
               <ChevronDown size={16} />
             </button>
           </div>
-        </div>
-
-        <div className="landing-hero-visual" aria-hidden={false}>
-          <img
-            src="/screenshots/editor.png"
-            alt="Depth editor with a phone mockup composited onto a studio backdrop"
-            className="landing-hero-image"
-            width={1440}
-            height={900}
-          />
         </div>
       </section>
 
