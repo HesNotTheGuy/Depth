@@ -370,8 +370,26 @@ export function CompositeViewport() {
     const files = e.dataTransfer.files;
     if (!files || files.length === 0) return;
     const file = files[0]; // Multi-file drop: take only the first; ignore the rest.
+
+    // Drop a 3D product model (.obj) — lands on the assumed floor via addObject snap.
+    if (file.name.toLowerCase().endsWith('.obj')) {
+      if (file.size > MAX_DROP_BYTES) {
+        setDropFeedback({ message: 'Model too large (max 5 MB)', type: 'error' });
+        return;
+      }
+      const url = URL.createObjectURL(file);
+      const id = useSceneStore.getState().addObject('custom');
+      useSceneStore.getState().updateObject(id, {
+        customModelUrl: url,
+        name: file.name.replace(/\.obj$/i, '') || 'Product',
+      });
+      setDropFeedback({ message: `Dropped ${file.name} — snapped to surface`, type: 'success' });
+      setFlashTarget(true);
+      return;
+    }
+
     if (!file.type.startsWith('image/')) {
-      setDropFeedback({ message: 'Only image files are supported', type: 'error' });
+      setDropFeedback({ message: 'Drop an image (PNG/JPG) or OBJ model', type: 'error' });
       return;
     }
     if (file.size > MAX_DROP_BYTES) {

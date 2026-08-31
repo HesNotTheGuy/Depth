@@ -1,4 +1,65 @@
-import type { Point2D, Vec3 } from '../store/useSceneStore';
+import type { Point2D, Vec3, SurfacePlane, ObjectPreset } from '../store/useSceneStore';
+
+/** Perspective floor quad in normalized image space (desk / ground band). */
+export const DEFAULT_FLOOR_CORNERS: [Point2D, Point2D, Point2D, Point2D] = [
+  { x: 0.12, y: 0.52 },
+  { x: 0.88, y: 0.52 },
+  { x: 0.98, y: 0.98 },
+  { x: 0.02, y: 0.98 },
+];
+
+/** Auto-created floor when a photo is uploaded — objects snap here out of the box. */
+export function createDefaultFloorSurface(name = 'Floor (auto)'): SurfacePlane {
+  const { position, rotation, size } = cornersTo3DPlane(DEFAULT_FLOOR_CORNERS);
+  return {
+    id: crypto.randomUUID(),
+    name,
+    corners: DEFAULT_FLOOR_CORNERS,
+    position,
+    rotation,
+    size,
+    visible: true,
+    color: '#6C63FF',
+  };
+}
+
+/** Approximate half-height for snap placement (matches SceneObject presets). */
+export function objectHalfHeight(type: ObjectPreset | string, scale: number): number {
+  switch (type) {
+    case 'box': return 0.5 * scale;
+    case 'cylinder': return 0.5 * scale;
+    case 'sphere': return 0.5 * scale;
+    case 'cone': return 0.5 * scale;
+    case 'torus': return 0.15 * scale;
+    case 'mug': return 0.4 * scale;
+    case 'phone': return 0.75 * scale;
+    case 'bottle': return 0.525 * scale;
+    case 'bag': return 0.5 * scale;
+    case 'card': return 0.25 * scale;
+    case 'donut': return 0.15 * scale;
+    case 'laptop': return 0.35 * scale;
+    case 'tablet': return 0.85 * scale;
+    case 'can': return 0.4 * scale;
+    case 'book': return 0.5 * scale;
+    case 'image': return 0.5 * scale;
+    case 'custom': return 0.5 * scale;
+    default: return 0.5 * scale;
+  }
+}
+
+/** Snap an object position onto the highest surface below it (if enabled). */
+export function snapPositionToSurfaces(
+  position: Vec3,
+  objectType: ObjectPreset | string,
+  scale: number,
+  surfaces: SurfacePlane[],
+  snapEnabled: boolean,
+): Vec3 {
+  if (!snapEnabled || surfaces.length === 0) return position;
+  const surfaceY = findSurfaceBelow(position, surfaces);
+  if (surfaceY === null) return position;
+  return { ...position, y: surfaceY + objectHalfHeight(objectType, scale) };
+}
 
 /**
  * Convert 4 corner points drawn on the image (normalized 0-1) into 3D plane properties.

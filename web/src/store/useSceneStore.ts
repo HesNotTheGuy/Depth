@@ -22,6 +22,7 @@ import {
   type SavedScene,
   type SavedSceneMeta,
 } from './scenePersistence';
+import { createDefaultFloorSurface, snapPositionToSurfaces } from '../utils/surfaceUtils';
 
 export type ObjectPreset =
   | 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus'
@@ -355,6 +356,8 @@ interface SceneState {
   addSurface: (surface: SurfacePlane) => void;
   updateSurface: (id: string, updates: Partial<SurfacePlane>) => void;
   removeSurface: (id: string) => void;
+  /** Replace surfaces with the auto floor inferred from the photo. */
+  initializePhotoSurfaces: () => void;
   setSnapToSurface: (snap: boolean) => void;
 
   // Export / blend
@@ -648,12 +651,19 @@ export const useSceneStore = create<SceneState>()(
         const existing = get().objects;
         const obj = makeDefaultObject(preset);
         obj.name = nextName(existing, preset);
-        // Offset so new objects don't fully stack
-        obj.position = {
+        // Offset so new objects don't fully stack; snap Y onto assumed floor.
+        const rawPosition = {
           x: existing.length * 0.3,
           y: 0.5,
           z: 0,
         };
+        obj.position = snapPositionToSurfaces(
+          rawPosition,
+          preset,
+          obj.scale,
+          get().surfaces,
+          get().snapToSurface,
+        );
         set({ objects: [...existing, obj], selectedObjectId: obj.id });
         return obj.id;
       },
@@ -839,6 +849,8 @@ export const useSceneStore = create<SceneState>()(
       removeSceneLight: (id) => set((s) => ({ sceneLights: s.sceneLights.filter((l) => l.id !== id) })),
 
       addSurface: (surface) => set((s) => ({ surfaces: [...s.surfaces, surface] })),
+      initializePhotoSurfaces: () =>
+        set({ surfaces: [createDefaultFloorSurface()] }),
       updateSurface: (id, updates) =>
         set((s) => ({ surfaces: s.surfaces.map((p) => (p.id === id ? { ...p, ...updates } : p)) })),
       removeSurface: (id) => set((s) => ({ surfaces: s.surfaces.filter((p) => p.id !== id) })),

@@ -8,7 +8,7 @@ import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance, type V
 import { useUIStore } from '../../store/useUIStore';
 import { useHoverStore } from '../../store/useHoverStore';
 import { useAlignmentStore } from '../../store/useAlignmentStore';
-import { findSurfaceBelow } from '../../utils/surfaceUtils';
+import { findSurfaceBelow, objectHalfHeight } from '../../utils/surfaceUtils';
 import { computeAlignment, thresholdForZoom, type AlignmentInput } from '../../utils/alignmentUtils';
 import { BOX_FACE_NAMES, detectFace } from './faceDetection';
 
@@ -330,29 +330,6 @@ function buildPrimitiveGeometry(objectType: string): THREE.BufferGeometry | null
   }
 }
 
-function getObjectHalfHeight(type: string, scale: number): number {
-  switch (type) {
-    case 'box': return 0.5 * scale;
-    case 'cylinder': return 0.5 * scale;
-    case 'sphere': return 0.5 * scale;
-    case 'cone': return 0.5 * scale;
-    case 'torus': return 0.15 * scale;
-    case 'mug': return 0.4 * scale;
-    case 'phone': return 0.75 * scale;
-    case 'bottle': return 0.525 * scale;
-    case 'bag': return 0.5 * scale;
-    case 'card': return 0.25 * scale;
-    case 'donut': return 0.15 * scale;
-    case 'laptop': return 0.35 * scale;
-    case 'tablet': return 0.85 * scale;
-    case 'can': return 0.4 * scale;
-    case 'book': return 0.5 * scale;
-    case 'image': return 0.5 * scale;
-    case 'custom': return 0.5 * scale;
-    default: return 0.5 * scale;
-  }
-}
-
 interface SceneObjectInstanceProps {
   object: SceneObjectInstance;
   isSelected: boolean;
@@ -526,7 +503,7 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     if (!snapToSurface || surfaces.length === 0) return;
     const surfaceY = findSurfaceBelow(position, surfaces);
     if (surfaceY !== null) {
-      const halfH = getObjectHalfHeight(objectType, scale);
+      const halfH = objectHalfHeight(objectType, scale);
       const targetY = surfaceY + halfH;
       if (Math.abs(position.y - targetY) > 0.01) {
         updateObject(id, { position: { ...position, y: targetY } });

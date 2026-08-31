@@ -88,7 +88,7 @@ async function openEditor(page: Page): Promise<void> {
     buffer: bg,
   });
 
-  await expect(page.getByText('Lighting matched')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/ready — lighting/i)).toBeVisible({ timeout: 30_000 });
   await page.getByRole('button', { name: /continue/i }).click();
 
   // Sidebar visible = editor mounted.

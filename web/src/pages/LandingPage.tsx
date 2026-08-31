@@ -76,12 +76,12 @@ const STEPS = [
   {
     icon: Upload,
     title: 'Drop in a photo',
-    desc: 'Any JPEG, PNG, or WebP. Lighting is estimated automatically.',
+    desc: 'Lighting and a floor surface are inferred automatically.',
   },
   {
     icon: Box,
-    title: 'Place your mockup PNG',
-    desc: 'Drop artwork onto a phone screen, or add a flat image plate.',
+    title: 'Drop your product in',
+    desc: 'Pick a mockup or upload a 3D model — it lands on the surface.',
   },
   {
     icon: Sun,
@@ -93,8 +93,8 @@ const STEPS = [
 const FEATURES = [
   { icon: Sun, title: 'Auto lighting', desc: 'Estimates direction, brightness, and color from your plate' },
   { icon: Smartphone, title: 'PNG on mockups', desc: 'Drop a screen design onto phone, tablet, or laptop' },
+  { icon: Layers, title: 'Assumed surfaces', desc: 'Floor inferred on upload; draw desks and shelves to refine' },
   { icon: Palette, title: 'Materials', desc: 'Matte, metal, glass, wood, marble, fabric, leather' },
-  { icon: Layers, title: 'Surface planes', desc: 'Draw quads so objects sit on desks and floors' },
   { icon: Download, title: 'Clean export', desc: 'PNG at 1× / 2× / 4×, or layered passes for Photoshop' },
 ] as const;
 
@@ -167,7 +167,7 @@ export function LandingPage() {
             Drop in a photo. Place a 3D object. The lighting just matches.
           </p>
           <p className="landing-hero-sub">
-            Drop a PNG onto a phone screen or image plate — lighting matches the photo.
+            Drop a photo, drop a product — it lands on the surface with matching light.
           </p>
           <div className="landing-hero-actions">
             <button type="button" onClick={goToApp} className="landing-cta-primary group">

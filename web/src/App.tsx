@@ -18,9 +18,14 @@ function App() {
 
     const tryRestore = () => {
       if (cancelled) return;
+      const scene = useSceneStore.getState();
+      // Legacy saves: background without surfaces — assume the floor on restore.
+      if (scene.backgroundImage && scene.surfaces.length === 0) {
+        scene.initializePhotoSurfaces();
+      }
       if (
         useUIStore.getState().step === 'upload' &&
-        useSceneStore.getState().backgroundImage
+        scene.backgroundImage
       ) {
         setStep('editor');
       }

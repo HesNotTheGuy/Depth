@@ -8,6 +8,7 @@ import { validateImageWithModal } from '../utils/uploadLimits';
 export function UploadScreen() {
   const setBackgroundImage = useSceneStore((s) => s.setBackgroundImage);
   const setEstimatedLighting = useSceneStore((s) => s.setEstimatedLighting);
+  const initializePhotoSurfaces = useSceneStore((s) => s.initializePhotoSurfaces);
   const setStep = useUIStore((s) => s.setStep);
   const isAnalyzing = useUIStore((s) => s.isAnalyzing);
   const setIsAnalyzing = useUIStore((s) => s.setIsAnalyzing);
@@ -23,6 +24,7 @@ export function UploadScreen() {
         const dataUrl = reader.result as string;
         setPreview(dataUrl);
         setBackgroundImage(dataUrl);
+        initializePhotoSurfaces();
         setIsAnalyzing(true);
 
         const lighting = await estimateLighting(dataUrl);
@@ -31,7 +33,7 @@ export function UploadScreen() {
       };
       reader.readAsDataURL(file);
     },
-    [setBackgroundImage, setEstimatedLighting, setIsAnalyzing]
+    [setBackgroundImage, setEstimatedLighting, initializePhotoSurfaces, setIsAnalyzing]
   );
 
   const handleDrop = useCallback(
@@ -137,10 +139,10 @@ export function UploadScreen() {
                   <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                   <div>
                     <span className="text-sm font-medium text-text-primary block">
-                      Analyzing lighting
+                      Analyzing your photo
                     </span>
                     <span className="text-xs text-text-muted">
-                      Estimating direction, color, intensity...
+                      Matching lighting and assuming a floor surface…
                     </span>
                   </div>
                 </div>
@@ -150,7 +152,7 @@ export function UploadScreen() {
               <div className="absolute top-3 right-3">
                 <div className="bg-success/90 text-white text-xs px-2.5 py-1 rounded-lg font-medium flex items-center gap-1.5">
                   <Sparkles size={12} />
-                  Lighting matched
+                  Ready — lighting + floor
                 </div>
               </div>
             )}
@@ -162,6 +164,7 @@ export function UploadScreen() {
                 setPreview(null);
                 setBackgroundImage(null);
                 setEstimatedLighting(null);
+                useSceneStore.setState({ surfaces: [] });
               }}
               className="flex-1 py-3 border border-white/10 rounded-xl text-sm font-medium text-text-secondary hover:bg-white/[0.03] hover:border-white/20 transition-all"
             >
@@ -180,7 +183,7 @@ export function UploadScreen() {
       )}
 
       <p className="relative z-10 text-xs text-text-muted mt-10 max-w-sm text-center leading-relaxed">
-        Lighting is estimated on your machine the moment the photo lands.
+        Lighting and a floor surface are estimated on your machine when the photo lands.
       </p>
     </div>
   );

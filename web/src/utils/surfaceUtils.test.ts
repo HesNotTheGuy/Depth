@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cornersTo3DPlane, findSurfaceBelow } from './surfaceUtils';
+import { cornersTo3DPlane, findSurfaceBelow, createDefaultFloorSurface, snapPositionToSurfaces } from './surfaceUtils';
 import type { Point2D } from '../store/useSceneStore';
 
 /**
@@ -67,6 +67,38 @@ describe('cornersTo3DPlane corner sorting', () => {
     // pure floor.
     expect(flatPlane.rotation.x).toBeCloseTo(-Math.PI / 2, 5);
     expect(persp.rotation.x).toBeGreaterThan(flatPlane.rotation.x);
+  });
+});
+
+describe('createDefaultFloorSurface', () => {
+  it('creates a visible floor with perspective corners', () => {
+    const floor = createDefaultFloorSurface();
+    expect(floor.name).toBe('Floor (auto)');
+    expect(floor.visible).toBe(true);
+    expect(floor.corners).toHaveLength(4);
+    expect(floor.size.width).toBeGreaterThan(0);
+    expect(floor.position.y).toBeGreaterThan(0);
+  });
+});
+
+describe('snapPositionToSurfaces', () => {
+  const floor = createDefaultFloorSurface();
+
+  it('lowers spawn Y onto the auto floor', () => {
+    const snapped = snapPositionToSurfaces(
+      { x: 0, y: 0.5, z: 0 },
+      'box',
+      1,
+      [floor],
+      true,
+    );
+    expect(snapped.y).toBeGreaterThan(floor.position.y);
+    expect(snapped.y).toBeCloseTo(floor.position.y + 0.5, 1);
+  });
+
+  it('leaves position unchanged when snap is off', () => {
+    const pos = { x: 0, y: 0.5, z: 0 };
+    expect(snapPositionToSurfaces(pos, 'box', 1, [floor], false)).toEqual(pos);
   });
 });
 

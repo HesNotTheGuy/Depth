@@ -42,8 +42,8 @@ test('upload → mockup → material → export', async ({ page }) => {
     buffer: Buffer.from(fileBuffer),
   });
 
-  // Wait for "Lighting matched" badge to confirm analysis finished.
-  await expect(page.getByText('Lighting matched')).toBeVisible({ timeout: 30_000 });
+  // Wait for analysis badge (lighting + auto floor).
+  await expect(page.getByText(/ready — lighting/i)).toBeVisible({ timeout: 30_000 });
 
   // Continue into the editor.
   await page.getByRole('button', { name: /continue/i }).click();
