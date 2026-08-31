@@ -383,7 +383,7 @@ export function CompositeViewport() {
     // No target → create a flat Image plate from the PNG (primary mockup-art path).
     const hover = useHoverStore.getState().latest;
     const sceneState = useSceneStore.getState();
-    let targetId = hover?.objectId ?? sceneState.selectedObjectId;
+    const targetId = hover?.objectId ?? sceneState.selectedObjectId;
 
     const reader = new FileReader();
     reader.onload = () => {
