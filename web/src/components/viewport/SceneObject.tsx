@@ -8,7 +8,7 @@ import { useSceneStore, type FaceTextureConfig, type SceneObjectInstance, type V
 import { useUIStore } from '../../store/useUIStore';
 import { useHoverStore } from '../../store/useHoverStore';
 import { useAlignmentStore } from '../../store/useAlignmentStore';
-import { findSurfaceBelow, objectHalfHeight } from '../../utils/surfaceUtils';
+import { snapPoseToSurfaces } from '../../utils/surfaceUtils';
 import { computeAlignment, thresholdForZoom, type AlignmentInput } from '../../utils/alignmentUtils';
 import { BOX_FACE_NAMES, detectFace } from './faceDetection';
 
@@ -498,16 +498,28 @@ function SceneObjectInstanceMesh({ object, isSelected }: SceneObjectInstanceProp
     invalidate();
   }, [objectType, customModelUrl, position, rotation, scale, color, material, roughness, metalness, transmission, ior, clearcoat, opacity, reflectivity, loadedTexture, loadedFaceTextures, selectedFace, isSelected, invalidate]);
 
-  // Snap to surface
+  // Snap to surface — height from plane normal at object XZ, optional tilt align.
   useEffect(() => {
     if (!snapToSurface || surfaces.length === 0) return;
-    const surfaceY = findSurfaceBelow(position, surfaces);
-    if (surfaceY !== null) {
-      const halfH = objectHalfHeight(objectType, scale);
-      const targetY = surfaceY + halfH;
-      if (Math.abs(position.y - targetY) > 0.01) {
-        updateObject(id, { position: { ...position, y: targetY } });
-      }
+    const snapped = snapPoseToSurfaces(
+      position,
+      rotation,
+      objectType,
+      scale,
+      surfaces,
+      true,
+      { alignToNormal: true },
+    );
+    const posDelta = Math.abs(snapped.position.y - position.y);
+    const rot = snapped.rotation;
+    const rotDelta = rot
+      ? Math.abs(rot.x - rotation.x) + Math.abs(rot.z - rotation.z)
+      : 0;
+    if (posDelta > 0.01 || rotDelta > 0.01) {
+      updateObject(id, {
+        position: snapped.position,
+        ...(rot ? { rotation: rot } : {}),
+      });
     }
   }, [position.x, position.z, surfaces, snapToSurface, objectType, scale]); // eslint-disable-line react-hooks/exhaustive-deps
 
