@@ -22,7 +22,7 @@ import {
   type SavedScene,
   type SavedSceneMeta,
 } from './scenePersistence';
-import { createDefaultFloorSurface, snapPositionToSurfaces } from '../utils/surfaceUtils';
+import { createDefaultFloorSurface, snapPoseToSurfaces } from '../utils/surfaceUtils';
 
 export type ObjectPreset =
   | 'box' | 'cylinder' | 'sphere' | 'cone' | 'torus'
@@ -651,19 +651,24 @@ export const useSceneStore = create<SceneState>()(
         const existing = get().objects;
         const obj = makeDefaultObject(preset);
         obj.name = nextName(existing, preset);
-        // Offset so new objects don't fully stack; snap Y onto assumed floor.
+        // Offset so new objects don't fully stack; snap onto assumed floor
+        // using plane height at XY (and align to surface normal).
         const rawPosition = {
           x: existing.length * 0.3,
           y: 0.5,
           z: 0,
         };
-        obj.position = snapPositionToSurfaces(
+        const snapped = snapPoseToSurfaces(
           rawPosition,
+          obj.rotation,
           preset,
           obj.scale,
           get().surfaces,
           get().snapToSurface,
+          { alignToNormal: true },
         );
+        obj.position = snapped.position;
+        if (snapped.rotation) obj.rotation = snapped.rotation;
         set({ objects: [...existing, obj], selectedObjectId: obj.id });
         return obj.id;
       },
